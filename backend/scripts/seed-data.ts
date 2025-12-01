@@ -1,37 +1,39 @@
-// --- HEADER UNTUK MENGATASI MASALAH RESOLUSI PATH & IMPORT ---
-// Menggunakan require untuk kompatibilitas yang lebih baik dengan tsc/Node.js
+
 const { createClient } = require('@supabase/supabase-js');
 const dotenv = require('dotenv');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
-// --- I. KONFIGURASI SUPABASE & ENV ---
 
-// Muat variabel lingkungan
+
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') }); 
 
-// Menggunakan variabel yang sudah ada di .env Anda
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY; 
 
+
+const PLACEHOLDER_USER_ID = '7e12bd6c-98d7-48fe-b788-48a877ea0a47'; 
+
+
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error("==================================================");
-    console.error("❌ ERROR KONFIGURASI ❌");
-    console.error("Gagal membaca SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY dari .env.");
-    console.error("Pastikan nama variabel di .env sudah benar dan tidak ada spasi.");
-    console.error("==================================================");
+    console.error("❌ ERROR KONFIGURASI: SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY tidak ditemukan di .env.");
     process.exit(1); 
 }
 
-// Inisialisasi Klien Supabase menggunakan Service Role Key (Admin Access)
-// Key ini akan bypass Row Level Security (RLS)
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 
-// --- II. KONSTANTA & TIPE DATA (Sesuai Skema UUID Anda) ---
+// --- II. KONSTANTA & TIPE DATA ---
 
-const PLACEHOLDER_USER_ID = '7e12bd6c-98d7-48fe-b788-48a877ea0a47'; 
-const PLACEHOLDER_DATASET_ID = null; 
+// ID dataset yang akan kita buat di awal skrip
+const DATASET_ID_FOR_SEEDS = uuidv4(); 
+
+const FILE_TYPES = ['xlsx', 'csv', 'pdf', 'docx', 'txt'];
+
+
+const SALE_SOURCES = ['xlsx', 'csv', 'pdf', 'docx', 'txt']; 
+const DUMMY_FILE_NAME = 'initial_seed_data';
+const DUMMY_FILE_TYPE = FILE_TYPES[0];
 
 interface ProductData {
   name: string;
@@ -39,10 +41,23 @@ interface ProductData {
   unit: string;
 }
 
+
+interface DatasetSeed {
+  id: string;
+  user_id: string; 
+  name: string;
+  source_file_name: string;
+  source_file_type: string;
+  storage_path: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ProductSeed extends ProductData {
   id: string; 
   user_id: string; 
-  dataset_id: string; 
+  dataset_id: string | null; 
   is_active: boolean;
   created_at: string;
 }
@@ -52,8 +67,22 @@ interface Sale {
   product_id: string; 
   quantity: number; 
   revenue: number; 
-  user_id: string;
+  user_id: string; 
+  source: string; 
 }
+
+// Data dummy dataset (WAJIB diisi)
+const SEEDED_DATASETS: DatasetSeed[] = [{
+    id: DATASET_ID_FOR_SEEDS,
+    user_id: PLACEHOLDER_USER_ID, 
+    name: 'Sample Data HACKATHON',
+    source_file_name: DUMMY_FILE_NAME,
+    source_file_type: DUMMY_FILE_TYPE, // 
+    storage_path: `/data/${PLACEHOLDER_USER_ID}/${DATASET_ID_FOR_SEEDS}`,
+    status: 'ready', 
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+}];
 
 // 5 Produk UMKM Makanan Anda
 const RAW_PRODUCTS: ProductData[] = [
@@ -68,7 +97,7 @@ const SEEDED_PRODUCTS: ProductSeed[] = RAW_PRODUCTS.map(p => ({
     ...p,
     id: uuidv4(), 
     user_id: PLACEHOLDER_USER_ID,
-    dataset_id: PLACEHOLDER_DATASET_ID,
+    dataset_id: DATASET_ID_FOR_SEEDS, // Merujuk ke dataset yang baru dibuat
     is_active: true,
     created_at: new Date().toISOString(),
 }));
@@ -76,7 +105,7 @@ const SEEDED_PRODUCTS: ProductSeed[] = RAW_PRODUCTS.map(p => ({
 const DAYS_TO_GENERATE = 60;
 
 
-// --- III. LOGIKA GENERASI DATA (60 Days, Burst, Weekend/Payday) ---
+// --- III. LOGIKA GENERASI DATA ---
 
 function generateSalesData(days: number): Sale[] {
   const sales: Sale[] = [];
@@ -87,16 +116,13 @@ function generateSalesData(days: number): Sale[] {
     currentDate.setDate(today.getDate() - i);
     const dateString = currentDate.toISOString().split('T')[0];
     
+    // ... (Logika Multiplier tetap)
     const dayOfWeek = currentDate.getDay(); 
     const dayOfMonth = currentDate.getDate();
-    
     let baseMultiplier = 1;
 
-    // Pola Weekend (1.5x)
     if (dayOfWeek === 0 || dayOfWeek === 6) { baseMultiplier *= 1.5; }
-    // Pola Gajian (2.5x)
     if (dayOfMonth >= 24 && dayOfMonth <= 26) { baseMultiplier *= 2.5; }
-    // Skenario Lonjakan (4.0x)
     if (i === 10 || i === 30 || i === 50) { baseMultiplier *= 4.0; }
 
     const randomBaseSales = Math.floor(Math.random() * 51) + 50; 
@@ -110,11 +136,16 @@ function generateSalesData(days: number): Sale[] {
         salesForProduct = Math.min(salesForProduct, remainingSales);
         
         if (salesForProduct > 0) {
+            // Pilih sumber secara acak dari list yang diizinkan (file types)
+            const randomSourceIndex = Math.floor(Math.random() * SALE_SOURCES.length);
+
             sales.push({
                 sale_date: dateString,
                 product_id: product.id,
                 quantity: salesForProduct,
                 revenue: salesForProduct * product.price,
+                user_id: PLACEHOLDER_USER_ID, 
+                source: SALE_SOURCES[randomSourceIndex], // Menggunakan nilai check constraint
             });
             remainingSales -= salesForProduct;
         }
@@ -131,14 +162,27 @@ async function seedDatabase() {
     console.log(`🚀 Seeding dimulai. URL Proyek: ${supabaseUrl}`);
     
     // --- Langkah 1: Hapus Data Lama ---
-    console.log("1/4. Menghapus data lama (sales & products)...");
-    // Gunakan Service Key untuk menghapus data, mengatasi RLS
+    console.log("1/5. Menghapus data lama (sales, products, datasets)...");
     await supabase.from('sales').delete().neq('id', '0'); 
     await supabase.from('products').delete().neq('id', '0'); 
+    await supabase.from('datasets').delete().neq('id', '0'); 
     console.log("   ✅ Data lama berhasil dihapus.");
 
-    // --- Langkah 2: Masukkan Data Produk ---
-    console.log("2/4. Memasukkan data 5 Produk...");
+    // --- Langkah 2: Masukkan Data Dataset (Wajib sebelum Products) ---
+    console.log("2/5. Memasukkan data 1 Dataset...");
+    const { error: datasetInsertError } = await supabase
+        .from('datasets')
+        .insert(SEEDED_DATASETS); 
+    
+    if (datasetInsertError) {
+        console.error("❌ Gagal memasukkan data dataset:", datasetInsertError.message);
+        return;
+    }
+    console.log("   ✅ Berhasil memasukkan 1 dataset dummy.");
+
+
+    // --- Langkah 3: Masukkan Data Produk ---
+    console.log("3/5. Memasukkan data 5 Produk...");
     const { error: productInsertError } = await supabase
         .from('products')
         .insert(SEEDED_PRODUCTS); 
@@ -149,10 +193,10 @@ async function seedDatabase() {
     }
     console.log(`   ✅ Berhasil memasukkan ${SEEDED_PRODUCTS.length} produk.`);
     
-    // --- Langkah 3 & 4: Generate dan Masukkan Data Penjualan ---
+    // --- Langkah 4 & 5: Generate dan Masukkan Data Penjualan ---
     const salesData = generateSalesData(DAYS_TO_GENERATE);
-    console.log(`3/4. Berhasil generate ${salesData.length} entri penjualan.`);
-    console.log("4/4. Memasukkan data penjualan ke Supabase (Batching)...");
+    console.log(`4/5. Berhasil generate ${salesData.length} entri penjualan.`);
+    console.log("5/5. Memasukkan data penjualan ke Supabase (Batching)...");
     
     const BATCH_SIZE = 1000;
     for (let i = 0; i < salesData.length; i += BATCH_SIZE) {
