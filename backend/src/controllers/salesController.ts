@@ -5,7 +5,16 @@ import { analyzeSales } from '../services/aiService';
 
 export const createSalesEntry = async (req: Request, res: Response) => {
   try {
-    const { product_id, sale_date, quantity, user_id, dataset_id, product_name } = req.body;
+    const userId = req.user?.sub;
+    const { product_id, sale_date, quantity, dataset_id, product_name } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false,
+        error: "User tidak terotentikasi" 
+      });
+    }
+
     if (!dataset_id) {
       return res.status(400).json({ 
         success: false,
@@ -16,7 +25,7 @@ export const createSalesEntry = async (req: Request, res: Response) => {
     const saleDateObj = new Date(sale_date);
     const qtyNumber = Number(quantity);
 
-    await bulkUpsertSales(user_id, dataset_id, [{
+    await bulkUpsertSales(userId, dataset_id, [{
       productName: product_name, 
       date: saleDateObj,
       quantity: qtyNumber,
@@ -33,7 +42,7 @@ export const createSalesEntry = async (req: Request, res: Response) => {
 
     const aiResult = await analyzeSales({
       current_qty: qtyNumber,
-      history: history.map(h => ({
+      history: history.map((h: typeof history[number]) => ({
         date: h.sale_date,
         quantity: Number(h.quantity)
       })),
@@ -42,7 +51,7 @@ export const createSalesEntry = async (req: Request, res: Response) => {
 
     if (aiResult) {
       await upsertAnalyticsResult(
-        user_id,
+        userId,
         dataset_id, 
         product_id,
         saleDateObj,

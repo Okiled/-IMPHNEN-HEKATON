@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 
 import productRoutes from './routes/productRoutes';
 import salesRoutes from './routes/salesRoutes';
+import { optionalAuth } from '../lib/auth/middleware';
 
 dotenv.config()
 
@@ -16,6 +17,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(optionalAuth); // Pasang optional auth agar req.user tersedia jika token valid
 
 app.use('/api/products', productRoutes); 
 app.use('/api/sales', salesRoutes);

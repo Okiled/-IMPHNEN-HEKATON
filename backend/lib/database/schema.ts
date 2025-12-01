@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '../../src/generated/prisma'
+import { Prisma, PrismaClient } from '@prisma/client'
 
 export type Dataset = Prisma.datasetsGetPayload<{}>
 export type Product = Prisma.productsGetPayload<{}>

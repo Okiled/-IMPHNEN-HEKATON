@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import {
   prisma,
   Dataset,
@@ -133,7 +134,9 @@ export async function upsertProductsForDataset(
       }
     })
 
-    const productInputs = new Map(normalized.map((product) => [product.name, product]))
+    const productInputs = new Map<string, { name: string; unit: string }>(
+      normalized.map((product) => [product.name, product]),
+    )
 
     const productNames = Array.from(productInputs.keys())
 
@@ -145,7 +148,9 @@ export async function upsertProductsForDataset(
       },
     })
 
-    const existingByName = new Map(existingProducts.map((product) => [product.name, product]))
+    const existingByName = new Map<string, Product>(
+      existingProducts.map((product: Product) => [product.name, product]),
+    )
 
     const operations = productNames.map((name) => {
       const product = productInputs.get(name)
@@ -232,8 +237,8 @@ export async function bulkUpsertSales(
 
     await ensureDatasetForUser(userId, datasetId)
 
-    await prisma.$transaction(async (tx) => {
-      const productNames = Array.from(new Set(rows.map((row) => row.productName)))
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const productNames = Array.from(new Set(rows.map((row: UpsertSalesRow) => row.productName)))
 
       const existingProducts = await tx.products.findMany({
         where: {
@@ -243,7 +248,9 @@ export async function bulkUpsertSales(
         },
       })
 
-      const existingByName = new Map(existingProducts.map((product) => [product.name, product]))
+      const existingByName = new Map<string, Product>(
+        existingProducts.map((product: Product) => [product.name, product]),
+      )
 
       const missingNames = productNames.filter((name) => !existingByName.has(name))
 
@@ -265,7 +272,9 @@ export async function bulkUpsertSales(
         },
       })
 
-      const productIdByName = new Map(productsForRows.map((product) => [product.name, product.id]))
+      const productIdByName = new Map<string, string>(
+        productsForRows.map((product: Product) => [product.name, product.id]),
+      )
 
       for (const row of rows) {
         const productId = productIdByName.get(row.productName)

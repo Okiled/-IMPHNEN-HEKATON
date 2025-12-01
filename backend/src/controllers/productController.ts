@@ -3,14 +3,14 @@ import { prisma } from '../../lib/database/schema';
 
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { user_id } = req.query; 
+    const userId = req.user?.sub;
 
-    if (!user_id) {
-      return res.status(400).json({ error: "User ID wajib dikirim" });
+    if (!userId) {
+      return res.status(401).json({ error: "User tidak terotentikasi" });
     }
 
     const products = await prisma.products.findMany({
-      where: { user_id: String(user_id) },
+      where: { user_id: String(userId) },
       orderBy: { created_at: 'desc' } 
     });
 
@@ -23,14 +23,19 @@ export const getProducts = async (req: Request, res: Response) => {
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const { user_id, name, unit } = req.body;
+    const userId = req.user?.sub;
+    const { name, unit } = req.body;
 
-    if (!user_id || !name) {
-      return res.status(400).json({ error: "User ID dan Nama Produk wajib diisi" });
+    if (!userId) {
+      return res.status(401).json({ error: "User tidak terotentikasi" });
+    }
+
+    if (!name) {
+      return res.status(400).json({ error: "Nama Produk wajib diisi" });
     }
 
     const existing = await prisma.products.findFirst({
-      where: { user_id, name }
+      where: { user_id: userId, name }
     });
 
     if (existing) {
@@ -39,7 +44,7 @@ export const createProduct = async (req: Request, res: Response) => {
 
     const newProduct = await prisma.products.create({
       data: {
-        user_id,
+        user_id: userId,
         name,
         unit: unit || 'pcs', 
         is_active: true,
