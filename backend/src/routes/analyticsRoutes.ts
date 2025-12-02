@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireAuth } from '../../lib/auth/middleware';
 import { getSalesData } from '../../lib/database/queries';
+// Update import ke fungsi baru
 import { calculateMomentum } from '../../lib/analytics/momentum';
 
 const router = express.Router();
@@ -26,7 +27,7 @@ router.get('/momentum', async (req, res) => {
       });
     }
 
-    // Fetch sales data for the last 90 days (sufficient for 30-day window + lag)
+    // Ambil data penjualan 90 hari terakhir (cukup untuk window 30 hari + lag)
     const sales = await getSalesData(String(userId), productId, 90);
 
     if (!sales.length) {
@@ -36,15 +37,17 @@ router.get('/momentum', async (req, res) => {
       });
     }
 
-    // Map database results to SalesData format required by the analytics engine
+    // Mapping data database ke format SalesData yang diminta momentum.ts
+    // (date: string | Date, value: number)
     const salesData = sales.map((row) => ({
-      date: row.date,    
+      date: row.date,    // Pastikan ini Date object atau ISO string
       value: row.quantity,
     }));
 
-    // Calculate momentum using the weighted EMA formula
+    // Panggil fungsi BARU: calculateMomentum
     const result = calculateMomentum(productId, salesData);
 
+    // Kirim response
     return res.json({
       success: true,
       data: result,

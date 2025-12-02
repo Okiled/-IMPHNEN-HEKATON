@@ -14,7 +14,7 @@ export type ProductIntelligence = {
   };
   forecast: {
     method: string;
-    predictions: { date: string; predicted_quantity: number; confidence: string }[];
+    predictions: { date: string; predicted_quantity: number; confidence: string; lower_bound?: number | null; upper_bound?: number | null }[];
     summary?: string;
     trend?: 'INCREASING' | 'STABLE' | 'DECREASING';
     totalForecast7d?: number;
@@ -208,31 +208,6 @@ class IntelligenceService {
     return res.data;
   }
 
-  private async getHybridForecast(
-    productId: string,
-    rulePredictions: { date: string; predicted_quantity: number }[],
-    dataQualityDays: number,
-    agreementScore: number,
-    burst: { score: number; severity: string; classification?: string },
-    momentum: { combined: number; status: string },
-    days: number,
-  ) {
-    const payload = {
-      productId,
-      rulePredictions,
-      dataQualityDays,
-      agreementScore,
-      burst,
-      momentum,
-      days,
-    };
-    const res = await axios.post(
-      `${PYTHON_SERVICE_URL}/api/ml/forecast-hybrid`,
-      payload,
-    );
-    return res.data;
-  }
-
   private fallbackToRuleBased(
     productId: string,
     productName: string | undefined,
@@ -274,7 +249,6 @@ class IntelligenceService {
     const momentum = this.calculateMomentum(cleaned);
     const burst = this.detectBurst(cleaned);
     const rulePred = this.getRuleBasedPredictions(cleaned, FORECAST_DAYS);
-    const agreementScore = 0; // will update once ML is present
 
     if (!cleaned.length || cleaned.length < MIN_TRAINING_DAYS) {
       return this.fallbackToRuleBased(productId, productName, cleaned);
@@ -298,31 +272,21 @@ class IntelligenceService {
         mlForecast?.predictions?.map((p: any) => ({
           date: p.date,
           predicted_quantity: p.predicted_quantity,
-        })) || [];
-
-      const agreement = this.calculateAgreement(rulePred, mlPredictions);
-      const hybrid = await this.getHybridForecast(
-        productId,
-        rulePred,
-        mlForecast?.data_quality_days || cleaned.length,
-        mlForecast?.ensemble?.agreement_score || agreementScore || agreement,
-        burst,
-        momentum,
-        FORECAST_DAYS,
-      );
-
-      const ensemblePredictions =
-        hybrid?.ensemble?.predictions?.map((p: any) => ({
-          date: p.date,
-          predicted_quantity: p.predicted_quantity,
           lower_bound: p.lower_bound ?? null,
           upper_bound: p.upper_bound ?? null,
-          confidence: p.confidence || 'MEDIUM',
-        })) || rulePred;
+          confidence: p.confidence || 'HIGH',
+        })) || [];
 
-      const trend = hybrid?.ensemble?.trend || this.determineTrend(ensemblePredictions);
+      if (!mlPredictions.length) {
+        return this.fallbackToRuleBased(productId, productName, cleaned);
+      }
+
+      const agreement = this.calculateAgreement(rulePred, mlPredictions) || 0;
+
+      const predictions = mlPredictions;
+      const trend = this.determineTrend(predictions);
       const totalForecast7d = Number(
-        ensemblePredictions.reduce(
+        predictions.reduce(
           (sum: number, p: any) => sum + (p.predicted_quantity || 0),
           0,
         ).toFixed(2),
@@ -330,8 +294,8 @@ class IntelligenceService {
 
       const confidence = this.buildConfidence(
         mlForecast?.data_quality_days || cleaned.length,
-        hybrid?.ensemble?.agreement_score ?? agreement,
-        hybrid?.ensemble?.confidence,
+        agreement,
+        'HIGH',
       );
 
       return {
@@ -344,13 +308,13 @@ class IntelligenceService {
           lastUpdated: new Date().toISOString(),
         },
         forecast: {
-          method: 'hybrid',
-          predictions: ensemblePredictions,
+          method: 'ml',
+          predictions,
           trend,
           totalForecast7d,
-          summary: 'Hybrid forecast combining rule-based and ML predictions',
+          summary: `ML forecast based on ${cleaned.length} days of data`,
         },
-        recommendations: hybrid?.recommendations || [],
+        recommendations: [],
         confidence,
       };
     } catch (error) {
