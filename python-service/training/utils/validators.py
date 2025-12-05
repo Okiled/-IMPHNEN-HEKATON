@@ -149,16 +149,23 @@ class DataCleaner(IDataCleaner):
             '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y',
             '%Y/%m/%d', '%d-%m-%Y', '%Y%m%d'
         ]
-        # Basic currency map; treat unknown currency as IDR (rate=1)
+        # Currency conversion rates to IDR (updated December 2024)
+        # Note: For UMKM users, all prices should already be in IDR
+        # This is mainly for historical dataset conversion
         self.currency_rates = {
             'IDR': 1.0,
             'RP': 1.0,
-            'EUR': 17000.0,
-            '€': 17000.0,
-            '?': 17000.0,  # fallback for euro glyph read as '?'
-            'USD': 15500.0,
-            '$': 15500.0,
-            'SGD': 11500.0,
+            'EUR': 16800.0,     # Updated Dec 2024: 1 EUR ≈ 16,800 IDR
+            '€': 16800.0,
+            '?': 16800.0,       # Fallback for euro glyph read as '?'
+            'USD': 15700.0,     # Updated Dec 2024: 1 USD ≈ 15,700 IDR
+            '$': 15700.0,
+            'SGD': 11700.0,     # Updated Dec 2024: 1 SGD ≈ 11,700 IDR
+            'GBP': 19900.0,     # Added: 1 GBP ≈ 19,900 IDR
+            '£': 19900.0,
+            'MYR': 3500.0,      # Added: 1 MYR ≈ 3,500 IDR
+            'CNY': 2170.0,      # Added: 1 CNY ≈ 2,170 IDR
+            '¥': 2170.0,
         }
         if currency_rates:
             self.currency_rates.update(currency_rates)
@@ -209,15 +216,28 @@ class DataCleaner(IDataCleaner):
         return round(amount * rate, 2)
 
     def _detect_currency(self, text: str) -> str:
+        """Detect currency from text string"""
         lower = text.lower()
+
+        # Check IDR first (most common for UMKM)
         if 'rp' in lower or 'idr' in lower:
             return 'IDR'
+
+        # Check other currencies
         if 'usd' in lower or '$' in text:
             return 'USD'
         if 'eur' in lower or '€' in text or '?' in text:
             return 'EUR'
+        if 'gbp' in lower or '£' in text:
+            return 'GBP'
         if 'sgd' in lower:
             return 'SGD'
+        if 'myr' in lower or 'rm' in lower:  # RM = Ringgit Malaysia
+            return 'MYR'
+        if 'cny' in lower or '¥' in text or 'rmb' in lower:
+            return 'CNY'
+
+        # Default to IDR for UMKM data
         return 'IDR'
 
     def _parse_numeric_amount(self, text: str) -> float | None:

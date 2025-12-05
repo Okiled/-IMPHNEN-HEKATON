@@ -8,14 +8,13 @@ import logging
 import glob
 import json
 import os
+import re
 import sys
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import pandas as pd  # ✅ ADD THIS
-import numpy as np   # ✅ ADD THIS
+from pydantic import BaseModel, validator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +45,17 @@ app.add_middleware(
 # Initialize components
 ensemble = EnsemblePredictor()
 report_ranker = WeeklyReportRanker(default_strategy="balanced")
+
+
+def sanitize_product_id(product_id: str) -> str:
+    """
+    Sanitize product ID to prevent path traversal attacks
+    Only allows alphanumeric, underscore, hyphen, and space
+    """
+    safe_id = re.sub(r'[^a-zA-Z0-9_\-\s]', '', product_id)
+    if not safe_id or len(safe_id) > 100:
+        raise HTTPException(status_code=400, detail="Invalid product_id format")
+    return safe_id
 
 
 def get_all_product_ids_from_models() -> List[str]:
@@ -101,22 +111,23 @@ class ForecastRequest(BaseModel):
     product_id: str
     days: int = 7
 
+    @validator('days')
+    def validate_days(cls, v):
+        if v < 1 or v > 30:
+            raise ValueError('days must be between 1 and 30')
+        return v
+
 
 class HybridForecastRequest(BaseModel):
     product_id: str
     realtime_data: Dict
     days: int = 7
 
-
-# ✅ ADD NEW PYDANTIC MODELS
-class SalesDataPoint(BaseModel):
-    date: str
-    quantity: float
-
-
-class UniversalPredictRequest(BaseModel):
-    sales_data: List[SalesDataPoint]
-    forecast_days: int = 7
+    @validator('days')
+    def validate_days(cls, v):
+        if v < 1 or v > 30:
+            raise ValueError('days must be between 1 and 30')
+        return v
 
 
 @app.get("/")
@@ -207,9 +218,11 @@ def list_models():
 
 
 @app.get("/api/ml/forecast")
-def get_forecast(productId: str, days: int = 7):
+def get_forecast(productId: str, days: int = Query(7, ge=1, le=30)):
     """Get ML forecast for product"""
     try:
+        # Sanitize product ID to prevent path traversal
+        productId = sanitize_product_id(productId)
         logger.info(f"Forecast request for: {productId}, days: {days}")
         
         model_candidates = [
@@ -227,19 +240,44 @@ def get_forecast(productId: str, days: int = 7):
                 break
 
         if not model_path:
+            available_models = get_all_product_ids_from_models()
             logger.error(f"Model not found for product: {productId}")
-            raise HTTPException(status_code=404, detail=f"Model not found for product: {productId}")
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": f"Model not found for product: {productId}",
+                    "available_models": available_models[:10],
+                    "total_models": len(available_models),
+                    "suggestion": "Check product_id spelling or train a model first"
+                }
+            )
 
         product_forecaster = HybridBrain(product_id=productId)
         success = product_forecaster.load_model(productId, model_path)
         if not success:
             logger.error(f"Failed to load model for product: {productId} from {model_path}")
-            raise HTTPException(status_code=500, detail=f"Failed to load model for product: {productId}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Model file found but failed to load. It may be corrupted. Try retraining the model."
+            )
 
         logger.info(f"Loaded model for {productId}, generating predictions...")
         predictions = product_forecaster.predict_next_days(days)
-        first_pred = predictions[0].get('predicted_quantity') if predictions else None
-        last_pred = predictions[-1].get('predicted_quantity') if predictions else None
+
+        # Safety check for empty predictions
+        if not predictions or len(predictions) == 0:
+            logger.error(f"Model returned empty predictions for {productId}")
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    'error': 'Model failed to generate predictions',
+                    'productId': productId,
+                    'suggestion': 'Model may need retraining with more data'
+                }
+            )
+
+        first_pred = predictions[0].get('predicted_quantity', 0)
+        last_pred = predictions[-1].get('predicted_quantity', 0)
 
         return {
             'success': True,
@@ -250,7 +288,7 @@ def get_forecast(productId: str, days: int = 7):
             'debug': {
                 'first_pred': first_pred,
                 'last_pred': last_pred,
-                'avg_pred': float(sum(p.get('predicted_quantity', 0) for p in predictions) / len(predictions)) if predictions else None,
+                'avg_pred': float(sum(p.get('predicted_quantity', 0) for p in predictions) / len(predictions)),
                 'model_mae': product_forecaster.mae,
                 'model_std_error': product_forecaster.std_error,
             }
@@ -263,132 +301,40 @@ def get_forecast(productId: str, days: int = 7):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/ml/predict-universal")
-def predict_universal(request: UniversalPredictRequest):
-    """
-    ✅ Universal prediction endpoint - works with ANY product
-    Uses statistical methods for products without trained models
-    """
-    try:
-        logger.info(f"Universal predict request: {len(request.sales_data)} data points, {request.forecast_days} days")
-        
-        # Validate minimum data
-        if len(request.sales_data) < 5:
-            return {
-                "success": False,
-                "message": "Insufficient data: need at least 5 data points"
-            }
-        
-        # Convert to arrays
-        dates = []
-        quantities = []
-        
-        for item in request.sales_data:
-            dates.append(item.date)
-            quantities.append(float(item.quantity))
-        
-        # Sort by date
-        sorted_pairs = sorted(zip(dates, quantities), key=lambda x: x[0])
-        dates, quantities = zip(*sorted_pairs)
-        quantities = list(quantities)
-        
-        logger.info(f"Processed {len(quantities)} data points")
-        
-        # Calculate simple statistics
-        mean_qty = sum(quantities) / len(quantities)
-        
-        # Calculate trend (simple linear regression)
-        n = len(quantities)
-        x = list(range(n))
-        x_mean = sum(x) / n
-        y_mean = mean_qty
-        
-        numerator = sum((x[i] - x_mean) * (quantities[i] - y_mean) for i in range(n))
-        denominator = sum((x[i] - x_mean) ** 2 for i in range(n))
-        
-        if denominator != 0:
-            slope = numerator / denominator
-            intercept = y_mean - slope * x_mean
-        else:
-            slope = 0
-            intercept = mean_qty
-        
-        # Calculate MAE for confidence
-        predictions_train = [slope * i + intercept for i in x]
-        mae = sum(abs(quantities[i] - predictions_train[i]) for i in range(n)) / n
-        
-        # Determine confidence
-        relative_error = mae / mean_qty if mean_qty > 0 else 1.0
-        
-        if relative_error < 0.15 and len(quantities) >= 60:
-            confidence_level = "HIGH"
-        elif relative_error < 0.30 and len(quantities) >= 30:
-            confidence_level = "MEDIUM"
-        else:
-            confidence_level = "LOW"
-        
-        # Generate forecasts
-        forecast_results = []
-        last_date_str = dates[-1]
-        
-        try:
-            from datetime import datetime, timedelta
-            last_date = datetime.strptime(last_date_str, '%Y-%m-%d')
-        except:
-            last_date = datetime.now()
-        
-        for i in range(1, request.forecast_days + 1):
-            # Linear projection with slight randomness for realism
-            base_pred = slope * (n + i - 1) + intercept
-            
-            # Ensure non-negative
-            base_pred = max(0, base_pred)
-            
-            # Add some variance based on historical data
-            variance = np.std(quantities) if len(quantities) > 1 else 0
-            lower = max(0, base_pred - variance)
-            upper = base_pred + variance
-            
-            forecast_date = last_date + timedelta(days=i)
-            
-            forecast_results.append({
-                "date": forecast_date.strftime('%Y-%m-%d'),
-                "predicted_quantity": round(float(base_pred), 2),
-                "confidence": confidence_level,
-                "lower_bound": round(float(lower), 2),
-                "upper_bound": round(float(upper), 2)
-            })
-        
-        logger.info(f"Successfully generated {len(forecast_results)} predictions")
-        
-        return {
-            "success": True,
-            "method": "universal-statistical",
-            "predictions": forecast_results,
-            "data_quality_days": len(quantities),
-            "debug": {
-                "mean": round(mean_qty, 2),
-                "trend_slope": round(slope, 4),
-                "mae": round(mae, 2),
-                "relative_error": round(relative_error, 2),
-                "confidence_level": confidence_level,
-                "data_points": len(quantities),
-                "avg_pred": round(float(np.mean([p['predicted_quantity'] for p in forecast_results])), 2)
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Universal predict error: {str(e)}", exc_info=True)
-        return {
-            "success": False,
-            "message": f"Prediction failed: {str(e)}"
-        }
-
-
 @app.post("/api/ml/train")
 def train_model(request: TrainRequest):
     """Train new model"""
     try:
+        # Sanitize product ID
+        request.product_id = sanitize_product_id(request.product_id)
+
+        # Validate sales_data is not empty
+        if not request.sales_data or len(request.sales_data) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="sales_data cannot be empty"
+            )
+
+        # Validate minimum data size
+        if len(request.sales_data) < 7:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data: {len(request.sales_data)} rows (minimum 7 required for training)"
+            )
+
+        # Validate data structure (check first 3 rows for performance)
+        for i, row in enumerate(request.sales_data[:3]):
+            if not isinstance(row, dict):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Row {i} must be a dictionary"
+                )
+            if 'date' not in row or 'quantity' not in row:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Row {i} missing required fields ('date', 'quantity')"
+                )
+
         result = forecaster.train(request.sales_data, request.product_id)
 
         os.makedirs(os.path.join(BASE_DIR, 'models'), exist_ok=True)
@@ -401,13 +347,327 @@ def train_model(request: TrainRequest):
             'model': result
         }
 
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # Training validation errors
+        logger.error(f"Training validation error: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Invalid data: {str(e)}")
     except Exception as e:
         logger.error(f"Training error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+@app.post("/api/ml/forecast-hybrid")
+def hybrid_forecast(request: HybridForecastRequest):
+    """Ensemble forecast with realtime data"""
+    try:
+        # Sanitize product ID
+        request.product_id = sanitize_product_id(request.product_id)
+
+        result = ensemble.predict(
+            product_id=request.product_id,
+            realtime_data=request.realtime_data,
+            days=request.days
+        )
+        if not result.get('success'):
+            raise HTTPException(status_code=404, detail=result.get('error', 'Hybrid forecast failed'))
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Hybrid forecast error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ... rest of the file stays the same (forecast-hybrid, inventory, profit, weekly report)
-# Keep all remaining endpoints as they are
+@app.post("/api/ml/inventory/optimize")
+def optimize_inventory(request: dict):
+    """
+    Inventory optimization endpoint
+    v2.0: Supports service_level parameter (low/medium/high/critical)
+    """
+    try:
+        product_id = request.get('product_id')
+        service_level = request.get('service_level', 'medium')
+
+        if not product_id:
+            raise HTTPException(status_code=400, detail="product_id is required")
+
+        # Sanitize product ID
+        product_id = sanitize_product_id(product_id)
+
+        # Validate and convert current_stock
+        try:
+            current_stock = float(request.get('current_stock', 0))
+            if current_stock < 0:
+                raise HTTPException(status_code=400, detail="current_stock cannot be negative")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="current_stock must be a number")
+
+        # Validate and convert lead_time_days
+        try:
+            lead_time_days = int(request.get('lead_time_days', 3))
+            if lead_time_days < 1 or lead_time_days > 30:
+                raise HTTPException(status_code=400, detail="lead_time_days must be between 1 and 30")
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="lead_time_days must be an integer")
+
+        model_candidates = [
+            os.path.join(BASE_DIR, "training", "models_output", f"xgboost_{product_id}.pkl"),
+            os.path.join(BASE_DIR, "models", f"xgboost_{product_id}.pkl"),
+            os.path.join(BASE_DIR, "models", "artifacts", f"xgboost_{product_id}.pkl"),
+        ]
+
+        model_path = None
+        for path in model_candidates:
+            if os.path.exists(path):
+                model_path = path
+                break
+
+        if not model_path:
+            raise HTTPException(status_code=404, detail=f"Model not found for product: {product_id}")
+
+        brain = HybridBrain(product_id)
+        if not brain.load_model(product_id, model_path):
+            raise HTTPException(status_code=500, detail="Failed to load model")
+
+        predictions = brain.predict_next_days(14)
+        quantities = [p.get('predicted_quantity', 0) for p in predictions]
+
+        optimizer = InventoryOptimizer()
+        inventory_result = optimizer.optimize_inventory(
+            quantities[:7],
+            current_stock,
+            lead_time_days,
+            service_level
+        )
+
+        return {
+            'success': True,
+            'product_id': product_id,
+            'inventory': inventory_result,
+            'forecast_7days': predictions[:7],
+            'generated_at': datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Inventory optimization error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/ml/profit/forecast")
+def forecast_profit(request: dict):
+    """
+    Profit forecasting endpoint
+    v2.0: Auto-allocates fixed costs across portfolio
+    """
+    try:
+        product_id = request.get('product_id')
+
+        if not product_id:
+            raise HTTPException(status_code=400, detail="product_id is required")
+
+        # Sanitize product ID
+        product_id = sanitize_product_id(product_id)
+
+        # Validate numeric inputs
+        try:
+            cost_per_unit = float(request.get('cost_per_unit', 0))
+            price_per_unit = float(request.get('price_per_unit', 0))
+            fixed_costs_weekly = float(request.get('fixed_costs_weekly', 0))
+            days = int(request.get('days', 7))
+
+            if cost_per_unit < 0:
+                raise HTTPException(status_code=400, detail="cost_per_unit cannot be negative")
+            if price_per_unit <= 0:
+                raise HTTPException(status_code=400, detail="price_per_unit must be positive")
+            if fixed_costs_weekly < 0:
+                raise HTTPException(status_code=400, detail="fixed_costs_weekly cannot be negative")
+            if days < 1 or days > 30:
+                raise HTTPException(status_code=400, detail="days must be between 1 and 30")
+        except (ValueError, TypeError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid numeric parameter: {str(e)}")
+
+        model_candidates = [
+            os.path.join(BASE_DIR, "training", "models_output", f"xgboost_{product_id}.pkl"),
+            os.path.join(BASE_DIR, "models", f"xgboost_{product_id}.pkl"),
+            os.path.join(BASE_DIR, "models", "artifacts", f"xgboost_{product_id}.pkl"),
+        ]
+
+        model_path = None
+        for path in model_candidates:
+            if os.path.exists(path):
+                model_path = path
+                break
+
+        if not model_path:
+            raise HTTPException(status_code=404, detail=f"Model not found for product: {product_id}")
+
+        brain = HybridBrain(product_id)
+        if not brain.load_model(product_id, model_path):
+            raise HTTPException(status_code=500, detail="Failed to load model")
+
+        predictions = brain.predict_next_days(days)
+
+        analyzer = ProfitAnalyzer()
+        profit_result = analyzer.forecast_profit(
+            predictions,
+            cost_per_unit,
+            price_per_unit,
+            fixed_costs_weekly
+        )
+
+        return {
+            'success': True,
+            'product_id': product_id,
+            'profit_analysis': profit_result,
+            'generated_at': datetime.now().isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Profit forecast error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ml/report/weekly")
+def get_weekly_report(request: Request, product_id: Optional[str] = None):
+    """Generate weekly report for products"""
+    try:
+        if product_id:
+            products = [product_id]
+        else:
+            products = get_all_product_ids_from_models()
+
+        if not products:
+            return {
+                'success': True,
+                'message': 'No trained models found',
+                'report': None
+            }
+
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=7)
+
+        period_info = {
+            'start': start_date.strftime('%Y-%m-%d'),
+            'end': end_date.strftime('%Y-%m-%d'),
+            'days': 7
+        }
+        products_data: List[Dict] = []
+
+        for pid in products:
+            try:
+                model_path = None
+                for candidate in [
+                    os.path.join(BASE_DIR, "training", "models_output", f"xgboost_{pid}.pkl"),
+                    os.path.join(BASE_DIR, "models", f"xgboost_{pid}.pkl"),
+                    os.path.join(BASE_DIR, "models", "artifacts", f"xgboost_{pid}.pkl")
+                ]:
+                    if os.path.exists(candidate):
+                        model_path = candidate
+                        break
+
+                if not model_path:
+                    continue
+
+                brain = HybridBrain(pid)
+                if not brain.load_model(pid, model_path):
+                    continue
+
+                predictions = brain.predict_next_days(7)
+                next_week_total = sum(p['predicted_quantity'] for p in predictions)
+
+                momentum_data = brain.physics_metrics.get('momentum', {})
+                status = momentum_data.get('status', 'STABLE')
+                combined_momentum = momentum_data.get('combined', 0)
+
+                burst_data = brain.physics_metrics.get('burst', {})
+                recommendation = brain.get_recommendation()
+
+                product_report = {
+                    'product_id': pid,
+                    'next_week_forecast': round(next_week_total, 1),
+                    'avg_daily_forecast': round(next_week_total / 7, 1),
+                    'momentum': {
+                        'status': status,
+                        'percentage': round(combined_momentum * 100, 1),
+                        'trend': 'UP' if combined_momentum > 0.05 else 'DOWN' if combined_momentum < -0.05 else 'FLAT'
+                    },
+                    'burst': {
+                        'level': burst_data.get('level', 'NORMAL'),
+                        'score': round(burst_data.get('burst_score', 0), 2)
+                    },
+                    'recommendation': {
+                        'type': recommendation.get('type'),
+                        'priority': recommendation.get('priority'),
+                        'message': recommendation.get('message')
+                    },
+                    'predictions': predictions
+                }
+
+                products_data.append(product_report)
+
+            except Exception as e:
+                logger.warning(f"Failed to generate report for {pid}: {e}")
+                continue
+
+        ranking_strategy = request.query_params.get('ranking_strategy', 'balanced')
+
+        # Safely parse top_n parameter
+        try:
+            top_n = int(request.query_params.get('top_n', 3))
+            top_n = max(1, min(top_n, 20))  # Clamp to [1, 20]
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid top_n parameter, using default 3")
+            top_n = 3
+
+        include_insights = request.query_params.get('include_insights', 'true').lower() == 'true'
+
+        ranked_products = report_ranker.rank_products(products=products_data, strategy=ranking_strategy)
+        needs_attention = report_ranker.identify_needs_attention(products=ranked_products, top_n=top_n)
+        top_performers = ranked_products[:top_n]
+
+        insights = None
+        if include_insights:
+            insights = report_ranker.generate_insights(
+                products=ranked_products,
+                top_performers=top_performers,
+                needs_attention=needs_attention
+            )
+
+        summary = {
+            "total_products": len(ranked_products),
+            "trending_up": sum(1 for p in ranked_products if p['momentum']['status'] == 'TRENDING_UP'),
+            "growing": sum(1 for p in ranked_products if p['momentum']['status'] == 'GROWING'),
+            "stable": sum(1 for p in ranked_products if p['momentum']['status'] == 'STABLE'),
+            "falling": sum(1 for p in ranked_products if p['momentum']['status'] == 'FALLING'),
+            "declining": sum(1 for p in ranked_products if p['momentum']['status'] == 'DECLINING')
+        }
+
+        report = {
+            'period': period_info,
+            'ranking_strategy': ranking_strategy,
+            'summary': summary,
+            'top_performers': top_performers,
+            'needs_attention': needs_attention,
+            'insights': insights,
+            'products': ranked_products if product_id else None
+        }
+
+        return {
+            'success': True,
+            'report': report,
+            'generated_at': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Weekly report error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

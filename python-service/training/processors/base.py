@@ -1,6 +1,7 @@
 '''
 Base Processor (Template Method Pattern)
 Defines common preprocessing workflow
+Enhanced for better data quality and XGBoost compatibility
 '''
 
 from abc import ABC, abstractmethod
@@ -8,6 +9,7 @@ from typing import Dict, Optional
 from pathlib import Path
 import os
 import pandas as pd
+import numpy as np
 from core.interfaces import IFileProcessor, IColumnDetector, IDataCleaner, IDataValidator
 from core.exceptions import FileProcessingError, ColumnDetectionError
 from core.models import ProcessedDataset
@@ -19,6 +21,7 @@ class BaseFileProcessor(IFileProcessor, ABC):
     '''
     Base class for all file processors (Template Method Pattern)
     Defines the common workflow, subclasses implement file-specific reading
+    Enhanced with better gap filling and outlier handling
     '''
 
     def __init__(self):
@@ -94,7 +97,7 @@ class BaseFileProcessor(IFileProcessor, ABC):
         fallback_product: str,
         price_col: Optional[str] = None
     ) -> Optional[Dict[str, pd.DataFrame]]:
-        '''Standardize dataframe to common format'''
+        '''Standardize dataframe to common format with enhanced quality checks'''
 
         cleaned_records = []
 
@@ -124,18 +127,17 @@ class BaseFileProcessor(IFileProcessor, ABC):
 
         output_df = pd.DataFrame(cleaned_records)
         
-        # ✅ ADD THIS: Aggregate per hari SEBELUM group by product
-        # Group by date and sum quantities (handle multiple orders per day)
+        # ═══════════════════════════════════════════════════════════
+        # AGGREGATE PER DAY (handle multiple transactions per day)
+        # ═══════════════════════════════════════════════════════════
         if 'product' in output_df.columns:
-            # Aggregate per product per day
             agg_dict = {'quantity': 'sum'}
             if 'price_idr' in output_df.columns:
-                agg_dict['price_idr'] = 'mean'  # Average price per day
+                agg_dict['price_idr'] = 'mean'
             
             output_df = output_df.groupby(['date', 'product']).agg(agg_dict).reset_index()
             logger.info(f"Aggregated to {len(output_df)} unique date-product combinations")
         else:
-            # Single product - aggregate per date only
             agg_dict = {'quantity': 'sum'}
             if 'price_idr' in output_df.columns:
                 agg_dict['price_idr'] = 'mean'
@@ -152,44 +154,25 @@ class BaseFileProcessor(IFileProcessor, ABC):
             warn_limit = 5
             warn_count = 0
             warn_suppressed = 0
+            
             for product in products:
                 cols = ['date', 'quantity']
                 if 'price_idr' in output_df.columns:
                     cols.append('price_idr')
-                product_df = output_df[output_df['product'] == product][cols]
+                product_df = output_df[output_df['product'] == product][cols].copy()
                 product_df = product_df.sort_values('date').reset_index(drop=True)
-                # --------------------------------------------------------------
-                # ✅ NEW: Interpolate missing dates (per-product)
-                # --------------------------------------------------------------
-                if 'date' in product_df.columns:
-                    date_range = pd.date_range(
-                        product_df['date'].min(),
-                        product_df['date'].max(),
-                        freq='D'
-                    )
-
-                    gap_count = len(date_range) - len(product_df)
-                    gap_pct = gap_count / len(date_range) * 100
-
-                    if gap_pct > 15:  # only fill if gaps > 15%
-                        logger.info(f"[{product}] Filling {gap_count} gaps ({gap_pct:.1f}%)")
-
-                        # Create full date frame
-                        complete_df = pd.DataFrame({'date': date_range})
-                        product_df = complete_df.merge(product_df, on='date', how='left')
-
-                        # quantity → ffill + bfill
-                        product_df['quantity'] = (
-                            product_df['quantity']
-                            .fillna(method='ffill')
-                            .fillna(method='bfill')
-                        )
-
-                        # price only ffill
-                        if 'price_idr' in product_df.columns:
-                            product_df['price_idr'] = product_df['price_idr'].fillna(method='ffill')
-
-                # Remove outliers
+                
+                # Convert date to datetime
+                product_df['date'] = pd.to_datetime(product_df['date'])
+                
+                # ═══════════════════════════════════════════════════════════
+                # FILL DATE GAPS (Critical for time series)
+                # ═══════════════════════════════════════════════════════════
+                product_df = self._fill_date_gaps(product_df, product)
+                
+                # ═══════════════════════════════════════════════════════════
+                # REMOVE OUTLIERS (Z-score based)
+                # ═══════════════════════════════════════════════════════════
                 product_df = self.data_cleaner.remove_outliers(product_df)
 
                 if self.validator.validate_dataframe(product_df):
@@ -212,6 +195,11 @@ class BaseFileProcessor(IFileProcessor, ABC):
         if 'price_idr' in output_df.columns:
             cols.append('price_idr')
         output_df = output_df[cols].sort_values('date').reset_index(drop=True)
+        output_df['date'] = pd.to_datetime(output_df['date'])
+        
+        # Fill gaps for single product
+        output_df = self._fill_date_gaps(output_df, fallback_product)
+        
         output_df = self.data_cleaner.remove_outliers(output_df)
 
         if self.validator.validate_dataframe(output_df):
@@ -220,3 +208,85 @@ class BaseFileProcessor(IFileProcessor, ABC):
 
         logger.warning(f"✗ Validation failed: {self.validator.get_validation_errors()}")
         return None
+
+    def _fill_date_gaps(self, df: pd.DataFrame, product_name: str) -> pd.DataFrame:
+        '''
+        Fill missing dates with intelligent interpolation
+        Uses forward fill + backward fill for continuity
+        '''
+        if 'date' not in df.columns or len(df) < 2:
+            return df
+        
+        df = df.copy()
+        df['date'] = pd.to_datetime(df['date'])
+        
+        # Create complete date range
+        date_range = pd.date_range(
+            df['date'].min(),
+            df['date'].max(),
+            freq='D'
+        )
+        
+        gap_count = len(date_range) - len(df)
+        
+        if gap_count <= 0:
+            return df
+        
+        gap_pct = gap_count / len(date_range) * 100
+        
+        # Only fill if gaps exist
+        if gap_count > 0:
+            logger.info(f"[{product_name}] Filling {gap_count} gaps ({gap_pct:.1f}%)")
+            
+            # Create full date frame
+            complete_df = pd.DataFrame({'date': date_range})
+            df = complete_df.merge(df, on='date', how='left')
+            
+            # ═══════════════════════════════════════════════════════════
+            # SMART GAP FILLING
+            # ═══════════════════════════════════════════════════════════
+            
+            # For small gaps (≤20%), use forward fill + backward fill
+            if gap_pct <= 20:
+                df['quantity'] = df['quantity'].ffill().bfill()
+            
+            # For medium gaps (20-50%), use rolling mean interpolation
+            elif gap_pct <= 50:
+                # First, fill with rolling mean
+                rolling_mean = df['quantity'].rolling(window=7, min_periods=1, center=True).mean()
+                df['quantity'] = df['quantity'].fillna(rolling_mean)
+                # Then fill remaining with ffill/bfill
+                df['quantity'] = df['quantity'].ffill().bfill()
+            
+            # For large gaps (>50%), use overall mean with day-of-week adjustment
+            else:
+                # Calculate day-of-week means from existing data
+                df['dow'] = df['date'].dt.dayofweek
+                
+                # Calculate existing day-of-week means
+                existing_data = df[df['quantity'].notna()]
+                if len(existing_data) > 0:
+                    overall_mean = existing_data['quantity'].mean()
+                    dow_means = existing_data.groupby('dow')['quantity'].mean()
+                    
+                    # Fill missing with day-of-week mean or overall mean
+                    def fill_missing(row):
+                        if pd.isna(row['quantity']):
+                            return dow_means.get(row['dow'], overall_mean)
+                        return row['quantity']
+                    
+                    df['quantity'] = df.apply(fill_missing, axis=1)
+                else:
+                    # No existing data - fill with 0 (shouldn't happen)
+                    df['quantity'] = df['quantity'].fillna(0)
+                
+                df = df.drop(columns=['dow'])
+            
+            # Fill price if present
+            if 'price_idr' in df.columns:
+                df['price_idr'] = df['price_idr'].ffill().bfill()
+        
+        # Ensure no NaN remains
+        df['quantity'] = df['quantity'].fillna(df['quantity'].mean() if len(df) > 0 else 1.0)
+        
+        return df

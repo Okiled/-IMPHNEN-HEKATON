@@ -31,19 +31,29 @@ class InventoryOptimizer:
     ) -> Dict:
         """
         Calculate optimal inventory parameters
-        
+
         Args:
             forecast: List of forecasted demand
             current_stock: Current inventory level
             lead_time_days: Supplier lead time in days
             service_level: Target service level (low/medium/high/critical)
-        
+
         Returns:
             Inventory recommendations
         """
-        
-        if not forecast or len(forecast) < lead_time_days:
+
+        # Validate forecast is not empty
+        if not forecast or len(forecast) == 0:
             return self._insufficient_data_response()
+
+        if len(forecast) < lead_time_days:
+            return {
+                'error': f'Forecast too short (need at least {lead_time_days} days)',
+                'recommendation': {
+                    'action': 'INSUFFICIENT_DATA',
+                    'message': f'Data forecast tidak cukup (butuh minimal {lead_time_days} hari)'
+                }
+            }
 
         # Calculate metrics
         avg_daily_demand = np.mean(forecast)
