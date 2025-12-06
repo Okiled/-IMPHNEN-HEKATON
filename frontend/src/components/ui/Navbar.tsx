@@ -78,7 +78,7 @@ export default function Navbar() {
                 <ShoppingBag size={20} />
               </div>
               <span className="text-2xl font-bold text-black tracking-tighter">
-                Market<span className="text-[#DC2626]">Pulse</span>
+                MEGA<span className="text-[#DC2626]">WAI</span>
               </span>
             </Link>
 

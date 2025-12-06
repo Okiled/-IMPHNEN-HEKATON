@@ -34,7 +34,8 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'OK',
         message: 'Backend is running!',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        routes: ['/api/products', '/api/products/ranking', '/api/products/:id']
     });
 });
 app.listen(PORT, () => {

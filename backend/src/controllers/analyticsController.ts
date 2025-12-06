@@ -3,6 +3,36 @@ import { intelligenceService } from '../services/intelligenceService';
 import { prisma } from '../../lib/database/schema';
 import { getSalesData } from '../../lib/database/queries';
 
+// Helper function to detect burst in sales data
+function detectBurst(salesData: { date: Date | string; quantity: number }[]) {
+  if (!salesData || salesData.length < 5) {
+    return { score: 0, severity: 'NORMAL', classification: 'NORMAL' };
+  }
+
+  const quantities = salesData.map(d => Number(d.quantity));
+  const baseline = quantities.slice(0, -1);
+  const latest = quantities[quantities.length - 1];
+
+  const mean = baseline.reduce((sum, val) => sum + val, 0) / (baseline.length || 1);
+  const variance = baseline.reduce((sum, val) => sum + (val - mean) ** 2, 0) / (baseline.length || 1);
+  const stdDev = Math.sqrt(variance) || 1;
+  const zScore = (latest - mean) / stdDev;
+
+  let severity = 'NORMAL';
+  if (zScore > 3) severity = 'CRITICAL';
+  else if (zScore > 2) severity = 'HIGH';
+  else if (zScore > 1.5) severity = 'MEDIUM';
+
+  let classification = 'NORMAL';
+  if (severity !== 'NORMAL') {
+    const lastDate = new Date(salesData[salesData.length - 1].date);
+    const day = lastDate.getDay();
+    classification = (day === 0 || day === 6) ? 'SEASONAL' : 'SPIKE';
+  }
+
+  return { score: Number(zScore.toFixed(2)), severity, classification };
+}
+
 export class AnalyticsController {
 
   /**
@@ -65,22 +95,41 @@ export class AnalyticsController {
         ? ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100
         : 0;
 
-      // Get burst alerts from daily_analytics
-      const burstAlerts = await prisma.daily_analytics.findMany({
-        where: {
-          user_id: userId,
-          burst_level: {
-            in: ['HIGH', 'CRITICAL']
-          }
-        },
-        include: {
-          products: true
-        },
-        orderBy: {
-          burst_score: 'desc'
-        },
-        take: 5
+      // Calculate burst alerts in real-time from sales data
+      const userProducts = await prisma.products.findMany({
+        where: { user_id: userId, is_active: true },
+        select: { id: true, name: true }
       });
+
+      const burstAlerts: Array<{
+        product_id: string;
+        product_name: string;
+        burst_score: number;
+        burst_level: string;
+      }> = [];
+
+      // Check each product for burst activity
+      for (const product of userProducts) {
+        try {
+          const salesHistory = await getSalesData(userId, product.id, 14); // Last 14 days
+          if (salesHistory.length >= 5) {
+            const burst = detectBurst(salesHistory);
+            if (burst.severity === 'HIGH' || burst.severity === 'CRITICAL') {
+              burstAlerts.push({
+                product_id: product.id,
+                product_name: product.name,
+                burst_score: burst.score,
+                burst_level: burst.severity
+              });
+            }
+          }
+        } catch (err) {
+          console.error(`[AnalyticsController] Error checking burst for ${product.id}:`, err);
+        }
+      }
+
+      // Sort by burst score descending
+      burstAlerts.sort((a, b) => b.burst_score - a.burst_score);
 
       // Get top products today
       const productSales = todaySales.reduce((acc, sale) => {
@@ -112,12 +161,7 @@ export class AnalyticsController {
             quantity_change: Math.round(quantityChange * 10) / 10,
             revenue_change: Math.round(revenueChange * 10) / 10
           },
-          burst_alerts: burstAlerts.map(alert => ({
-            product_id: alert.product_id,
-            product_name: alert.products?.name || 'Unknown',
-            burst_score: Number(alert.burst_score || 0),
-            burst_level: alert.burst_level || 'NORMAL'
-          })),
+          burst_alerts: burstAlerts.slice(0, 5), // Return top 5 burst alerts
           top_products: topProducts
         }
       });

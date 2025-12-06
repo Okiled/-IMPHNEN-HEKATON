@@ -7,6 +7,7 @@ const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = (0, express_1.Router)();
 router.use(authMiddleware_1.authenticateToken);
 router.post('/', salesController_1.createSalesEntry);
+router.post('/bulk', salesController_1.createBulkSales);
 router.get('/', salesController_1.getSalesData);
 router.get('/:id', salesController_1.getSalesById);
 router.delete('/:id', salesController_1.deleteSales);

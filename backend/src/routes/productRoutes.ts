@@ -1,5 +1,5 @@
 import express from 'express';
-import { getProducts, createProduct, getProductTrend } from '../controllers/productController';
+import { getProducts, createProduct, getProductTrend, updateProduct, getProductsWithRanking, getProductDetail, deleteProduct } from '../controllers/productController';
 import { requireAuth } from '../../lib/auth/middleware';
 import { prisma } from '../../lib/database/schema';
 
@@ -15,12 +15,20 @@ router.get('/internal/list', async (_req, res) => {
   }
 });
 
+// Apply auth middleware to all routes below
+router.use(requireAuth);
+
+// Specific routes MUST come before /:id (order matters!)
+router.get('/trend', getProductTrend);
+router.get('/ranking', getProductsWithRanking);
+
 // Public endpoint
 router.get('/', getProducts);
 
-// Protected routes
-router.use(requireAuth);
-router.get('/trend', getProductTrend);
+// Dynamic routes (must be last)
+router.get('/:id', getProductDetail);
 router.post('/', createProduct);
+router.put('/:id', updateProduct);
+router.delete('/:id', deleteProduct);
 
 export default router;

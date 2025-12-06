@@ -18,10 +18,16 @@ router.get('/internal/list', async (_req, res) => {
         res.status(500).json({ error: 'Failed to fetch products' });
     }
 });
+// Apply auth middleware to all routes below
+router.use(middleware_1.requireAuth);
+// Specific routes MUST come before /:id (order matters!)
+router.get('/trend', productController_1.getProductTrend);
+router.get('/ranking', productController_1.getProductsWithRanking);
 // Public endpoint
 router.get('/', productController_1.getProducts);
-// Protected routes
-router.use(middleware_1.requireAuth);
-router.get('/trend', productController_1.getProductTrend);
+// Dynamic routes (must be last)
+router.get('/:id', productController_1.getProductDetail);
 router.post('/', productController_1.createProduct);
+router.put('/:id', productController_1.updateProduct);
+router.delete('/:id', productController_1.deleteProduct);
 exports.default = router;

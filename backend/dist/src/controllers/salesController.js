@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteSales = exports.getSalesById = exports.getSalesData = exports.createSalesEntry = void 0;
+exports.createBulkSales = exports.deleteSales = exports.getSalesById = exports.getSalesData = exports.createSalesEntry = void 0;
 const schema_1 = require("../../lib/database/schema");
 const queries_1 = require("../../lib/database/queries");
 const intelligenceService_1 = require("../services/intelligenceService");
@@ -30,21 +30,23 @@ const createSalesEntry = async (req, res) => {
         const saleDateObj = new Date(sale_date);
         // 1. Get or create dataset
         if (!dataset_id) {
-            const userDataset = await schema_1.prisma.datasets.findFirst({
-                where: { user_id: userId },
-                orderBy: { created_at: 'desc' }
+            // dataset khusus untuk manual input
+            let targetDataset = await schema_1.prisma.datasets.findFirst({
+                where: {
+                    user_id: userId,
+                    source_file_type: 'csv'
+                }
             });
-            if (userDataset) {
-                dataset_id = userDataset.id;
+            if (targetDataset) {
+                dataset_id = targetDataset.id;
             }
             else {
-                // Create default dataset for user
                 const newDataset = await schema_1.prisma.datasets.create({
                     data: {
                         user_id: userId,
-                        name: 'Default Dataset',
-                        source_file_name: 'manual_input',
-                        source_file_type: 'manual',
+                        name: 'Manual_Input_Sales',
+                        source_file_name: 'manual_entry',
+                        source_file_type: 'csv',
                         storage_path: '',
                         status: 'active'
                     }
@@ -299,3 +301,136 @@ const deleteSales = async (req, res) => {
     }
 };
 exports.deleteSales = deleteSales;
+/**
+ * POST /api/sales/bulk
+ * Bulk create sales entries for multiple products at once
+ */
+const createBulkSales = async (req, res) => {
+    try {
+        const userId = req.user?.sub;
+        const { sale_date, entries } = req.body;
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                error: "User tidak terotentikasi"
+            });
+        }
+        if (!entries || !Array.isArray(entries) || entries.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "Entries harus berupa array dan tidak boleh kosong"
+            });
+        }
+        const saleDateObj = new Date(sale_date);
+        // Get or create dataset
+        let targetDataset = await schema_1.prisma.datasets.findFirst({
+            where: {
+                user_id: userId,
+                source_file_type: 'csv'
+            }
+        });
+        let dataset_id;
+        if (targetDataset) {
+            dataset_id = targetDataset.id;
+        }
+        else {
+            const newDataset = await schema_1.prisma.datasets.create({
+                data: {
+                    user_id: userId,
+                    name: 'Manual_Input_Sales',
+                    source_file_name: 'manual_entry',
+                    source_file_type: 'csv',
+                    storage_path: '',
+                    status: 'active'
+                }
+            });
+            dataset_id = newDataset.id;
+        }
+        // Filter entries with quantity > 0
+        const validEntries = entries.filter((e) => e.quantity > 0);
+        if (validEntries.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: "Tidak ada produk dengan quantity > 0"
+            });
+        }
+        // Prepare bulk upsert data
+        const salesData = validEntries.map((entry) => ({
+            productName: entry.product_name,
+            date: saleDateObj,
+            quantity: Number(entry.quantity),
+            source: 'manual_bulk'
+        }));
+        // Bulk upsert
+        await (0, queries_1.bulkUpsertSales)(userId, dataset_id, salesData);
+        // Run AI analysis for each product (async, don't block response)
+        const analysisPromises = validEntries.map(async (entry) => {
+            try {
+                const product = await schema_1.prisma.products.findFirst({
+                    where: { id: entry.product_id, user_id: userId }
+                });
+                if (!product)
+                    return null;
+                const history = await schema_1.prisma.sales.findMany({
+                    where: {
+                        product_id: entry.product_id,
+                        user_id: userId
+                    },
+                    orderBy: { sale_date: 'desc' },
+                    take: 60
+                });
+                if (history.length >= 5) {
+                    const salesHistory = history.map(h => ({
+                        date: h.sale_date,
+                        quantity: Number(h.quantity),
+                        productName: product.name
+                    }));
+                    const analysis = await intelligenceService_1.intelligenceService.analyzeProduct(product.id, product.name, salesHistory);
+                    if (analysis) {
+                        await (0, queries_1.upsertAnalyticsResult)(userId, dataset_id, product.id, saleDateObj, {
+                            actualQty: Number(entry.quantity),
+                            burstScore: analysis.realtime.burst.score,
+                            burstLevel: analysis.realtime.burst.severity,
+                            momentumCombined: analysis.realtime.momentum.combined,
+                            momentumLabel: analysis.realtime.momentum.status,
+                            aiInsight: {
+                                source: 'intelligenceService',
+                                method: analysis.forecast.method,
+                                confidence: analysis.confidence.overall,
+                                trend: analysis.forecast.trend
+                            }
+                        });
+                    }
+                }
+            }
+            catch (err) {
+                console.error(`[BulkSales] Analysis error for ${entry.product_id}:`, err);
+            }
+        });
+        // Don't await all analysis - let them run in background
+        Promise.all(analysisPromises).catch(console.error);
+        // Trigger burst analytics
+        (0, burstService_1.generateBurstAnalytics)(userId, saleDateObj).catch(console.error);
+        res.status(201).json({
+            success: true,
+            message: `${validEntries.length} produk berhasil disimpan`,
+            data: {
+                sale_date: saleDateObj.toISOString().split('T')[0],
+                products_saved: validEntries.length,
+                entries: validEntries.map((e) => ({
+                    product_id: e.product_id,
+                    product_name: e.product_name,
+                    quantity: e.quantity
+                }))
+            }
+        });
+    }
+    catch (error) {
+        console.error("[SalesController] Bulk create error:", error);
+        res.status(500).json({
+            success: false,
+            error: error instanceof Error ? error.message : "Server Error"
+        });
+    }
+};
+exports.createBulkSales = createBulkSales;

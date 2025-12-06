@@ -102,22 +102,46 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
     setError(null);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      if (!token) {
+        throw new Error("Token tidak ditemukan. Silakan login ulang.");
+      }
+
       const res = await fetch(
         `http://localhost:5000/api/intelligence/analyze/${productId}`,
         {
           headers: {
             "Content-Type": "application/json",
-            Authorization: token ? `Bearer ${token}` : "",
+            Authorization: `Bearer ${token}`,
           },
         },
       );
+
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("Session habis. Silakan login ulang.");
+      }
+
+      if (!res.ok) {
+        const contentType = res.headers.get('content-type');
+        if (contentType?.includes('text/html')) {
+          throw new Error("Route tidak ditemukan (404). Backend mungkin perlu restart.");
+        }
+        const errorText = await res.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.error || `HTTP ${res.status}`);
+        } catch {
+          throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 100)}`);
+        }
+      }
+
       const data = await res.json();
-      if (!res.ok || !data?.success) {
+      if (!data?.success) {
         throw new Error(data?.error || "Gagal memuat intelijen produk");
       }
       setIntelligence(data.data);
       setLastUpdated(new Date());
     } catch (err: any) {
+      console.error('IntelligenceDashboard fetch error:', err);
       setError(err?.message || "Gagal memuat intelijen produk");
       setIntelligence(null);
     } finally {
@@ -253,7 +277,7 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
 
   return (
     <div className="space-y-8">
-      {intelligence.realtime?.burst?.score > 2.5 && !alertDismissed && (
+      {(intelligence.realtime?.burst?.score || 0) > 2.5 && !alertDismissed && (
         <AlertCard
           productName={intelligence.productName || "Produk"}
           score={intelligence.realtime.burst.score}
@@ -409,9 +433,15 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
                 <Tooltip />
                 <Area
                   type="monotone"
+                  dataKey="lower"
+                  stroke="none"
+                  fill="#ffffff"
+                  fillOpacity={1}
+                />
+                <Area
+                  type="monotone"
                   dataKey="upper"
                   stroke="none"
-                  baseLine={(d: any) => d?.lower}
                   fill="url(#band)"
                   fillOpacity={0.3}
                 />
@@ -475,10 +505,10 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
                 <div className="flex-1">
                   <h4 className="text-lg font-bold text-purple-700 mb-2">{primaryRecommendation.message}</h4>
                   <ul className="space-y-2">
-                    {primaryRecommendation.actions?.map((action: string, i: number) => (
+                    {(primaryRecommendation.suggestions || primaryRecommendation.details)?.map((item: string, i: number) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
                         <span className="text-green-600 font-bold">✓</span>
-                        <span>{action}</span>
+                        <span>{item}</span>
                       </li>
                     ))}
                   </ul>

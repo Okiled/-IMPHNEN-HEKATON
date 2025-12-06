@@ -105,7 +105,7 @@ export default function AuthPage() {
               transition={{ duration: 0.25 }}
               className="text-2xl font-bold text-center"
             >
-              {mode === "login" ? "Login Market Pulse" : "Daftar Akun Baru"}
+              {mode === "login" ? "Login MEGAWAI" : "Daftar Akun Baru"}
             </motion.h2>
           </CardHeader>
 
