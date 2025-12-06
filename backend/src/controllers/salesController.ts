@@ -338,3 +338,161 @@ export const deleteSales = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * POST /api/sales/bulk
+ * Bulk create sales entries for multiple products at once
+ */
+export const createBulkSales = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.sub;
+    const { sale_date, entries } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false,
+        error: "User tidak terotentikasi" 
+      });
+    }
+
+    if (!entries || !Array.isArray(entries) || entries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Entries harus berupa array dan tidak boleh kosong"
+      });
+    }
+
+    const saleDateObj = new Date(sale_date);
+
+    // Get or create dataset
+    let targetDataset = await prisma.datasets.findFirst({
+      where: { 
+        user_id: userId,
+        source_file_type: 'csv'
+      }
+    });
+    
+    let dataset_id: string;
+    if (targetDataset) {
+      dataset_id = targetDataset.id;
+    } else {
+      const newDataset = await prisma.datasets.create({
+        data: {
+          user_id: userId,
+          name: 'Manual_Input_Sales', 
+          source_file_name: 'manual_entry',
+          source_file_type: 'csv', 
+          storage_path: '',
+          status: 'active'
+        }
+      });
+      dataset_id = newDataset.id;
+    }
+
+    // Filter entries with quantity > 0
+    const validEntries = entries.filter((e: any) => e.quantity > 0);
+
+    if (validEntries.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Tidak ada produk dengan quantity > 0"
+      });
+    }
+
+    // Prepare bulk upsert data
+    const salesData = validEntries.map((entry: any) => ({
+      productName: entry.product_name,
+      date: saleDateObj,
+      quantity: Number(entry.quantity),
+      source: 'manual_bulk'
+    }));
+
+    // Bulk upsert
+    await bulkUpsertSales(userId, dataset_id, salesData);
+
+    // Run AI analysis for each product (async, don't block response)
+    const analysisPromises = validEntries.map(async (entry: any) => {
+      try {
+        const product = await prisma.products.findFirst({
+          where: { id: entry.product_id, user_id: userId }
+        });
+
+        if (!product) return null;
+
+        const history = await prisma.sales.findMany({
+          where: { 
+            product_id: entry.product_id,
+            user_id: userId
+          },
+          orderBy: { sale_date: 'desc' },
+          take: 60
+        });
+
+        if (history.length >= 5) {
+          const salesHistory = history.map(h => ({
+            date: h.sale_date,
+            quantity: Number(h.quantity),
+            productName: product.name
+          }));
+
+          const analysis = await intelligenceService.analyzeProduct(
+            product.id,
+            product.name,
+            salesHistory
+          );
+
+          if (analysis) {
+            await upsertAnalyticsResult(
+              userId,
+              dataset_id,
+              product.id,
+              saleDateObj,
+              {
+                actualQty: Number(entry.quantity),
+                burstScore: analysis.realtime.burst.score,
+                burstLevel: analysis.realtime.burst.severity,
+                momentumCombined: analysis.realtime.momentum.combined,
+                momentumLabel: analysis.realtime.momentum.status,
+                aiInsight: {
+                  source: 'intelligenceService',
+                  method: analysis.forecast.method,
+                  confidence: analysis.confidence.overall,
+                  trend: analysis.forecast.trend
+                }
+              }
+            );
+          }
+        }
+      } catch (err) {
+        console.error(`[BulkSales] Analysis error for ${entry.product_id}:`, err);
+      }
+    });
+
+    // Don't await all analysis - let them run in background
+    Promise.all(analysisPromises).catch(console.error);
+
+    // Trigger burst analytics
+    generateBurstAnalytics(userId, saleDateObj).catch(console.error);
+
+    res.status(201).json({
+      success: true,
+      message: `${validEntries.length} produk berhasil disimpan`,
+      data: {
+        sale_date: saleDateObj.toISOString().split('T')[0],
+        products_saved: validEntries.length,
+        entries: validEntries.map((e: any) => ({
+          product_id: e.product_id,
+          product_name: e.product_name,
+          quantity: e.quantity
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error("[SalesController] Bulk create error:", error);
+    res.status(500).json({ 
+      success: false,
+      error: error instanceof Error ? error.message : "Server Error" 
+    });
+  }
+};

@@ -1,9 +1,8 @@
-import { PrismaClient } from '@prisma/client';
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/authMiddleware';
 import { intelligenceService } from '../services/intelligenceService';
+import { prisma } from '../../lib/database/schema';
 
-const prisma = new PrismaClient();
 const router = Router();
 
 // All intelligence routes require authentication

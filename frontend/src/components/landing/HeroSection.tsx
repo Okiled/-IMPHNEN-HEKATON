@@ -1,0 +1,116 @@
+"use client";
+
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { ArrowRight, TrendingUp, Zap, ShieldCheck } from "lucide-react";
+
+export function HeroSection() {
+  return (
+    <section className="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
+      <div className="absolute inset-0 -z-10 h-full w-full bg-white bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] [mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,#000_70%,transparent_100%)]"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <span className="inline-block py-1 px-3 rounded-full bg-red-50 text-[#DC2626] text-sm font-bold tracking-wide mb-6 border border-red-100">
+            Boost Your Business Growth
+          </span>
+        </motion.div>
+
+        <motion.h1
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900 mb-6"
+        >
+          Manage Sales like a <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#DC2626] to-black">
+            Pro Professional
+          </span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="mt-4 text-xl text-gray-600 max-w-2xl mx-auto mb-10"
+        >
+          MEGAWAI membantu kamu mencatat, menganalisa, dan memprediksi penjualan dengan kekuatan AI. Simpel, Cepat, dan Akurat.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+        >
+          <Link href="/dashboard">
+            <button className="px-8 py-4 bg-[#DC2626] text-white rounded-full font-bold text-lg shadow-lg hover:bg-red-700 hover:shadow-xl transition-all transform hover:-translate-y-1 flex items-center gap-2">
+              Go to Dashboard <ArrowRight size={20} />
+            </button>
+          </Link>
+
+          <Link href="/products">
+            <button className="px-8 py-4 bg-white text-black border-2 border-gray-200 rounded-full font-bold text-lg hover:border-black hover:bg-gray-50 transition-all">
+              View Products
+            </button>
+          </Link>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+export function FeaturesSection() {
+  const features = [
+    {
+      icon: TrendingUp,
+      title: "Real-time Analytics",
+      description: "Pantau performa penjualanmu secara langsung dengan grafik yang mudah dipahami.",
+      iconBg: "bg-red-100",
+      iconColor: "text-[#DC2626]",
+    },
+    {
+      icon: Zap,
+      title: "AI Powered",
+      description: "Dapatkan insight otomatis dari AI untuk menentukan strategi penjualan terbaikmu.",
+      iconBg: "bg-black",
+      iconColor: "text-white",
+    },
+    {
+      icon: ShieldCheck,
+      title: "Secure & Reliable",
+      description: "Data kamu tersimpan aman dengan enkripsi tingkat tinggi. Fokus jualan aja!",
+      iconBg: "bg-red-100",
+      iconColor: "text-[#DC2626]",
+    },
+  ];
+
+  return (
+    <section className="py-20 bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {features.map((feature, index) => (
+            <motion.div
+              key={feature.title}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              whileHover={{ y: -5 }}
+              className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100"
+            >
+              <div className={`w-12 h-12 ${feature.iconBg} rounded-lg flex items-center justify-center ${feature.iconColor} mb-6`}>
+                <feature.icon size={24} />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
+              <p className="text-gray-500">{feature.description}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}

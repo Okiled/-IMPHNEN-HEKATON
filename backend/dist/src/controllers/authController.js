@@ -54,7 +54,7 @@ async function register(req, res) {
             email,
             password,
             email_confirm: true,
-            user_metadata: { full_name: name },
+            user_metadata: name ? { full_name: name } : {},
         });
         if (createError || !created?.user) {
             const message = createError?.message || 'Gagal membuat akun';

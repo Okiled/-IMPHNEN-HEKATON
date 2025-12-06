@@ -1,9 +1,7 @@
 import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
 import { getCalendarFactors } from '../../lib/analytics/calendar';
 import { getSalesData } from '../../lib/database/queries';
-
-const prisma = new PrismaClient();
+import { prisma } from '../../lib/database/schema';
 
 export type SalesPoint = { date: Date | string; quantity: number; productName?: string };
 
@@ -303,13 +301,32 @@ class IntelligenceService {
 
   async getWeeklyReport(userId: string, topN: number = 10) {
     try {
-      return {
-        summary: { burst_alerts: 0 },
-        topPerformers: [],
-        needsAttention: [],
-        insights: ['Weekly report integration pending'],
-        generatedAt: new Date().toISOString()
-      };
+      const mlAvailable = await this.isMLAvailable();
+
+      if (mlAvailable) {
+        try {
+          const response = await axios.get(`${ML_API_URL}/api/ml/report/weekly`, {
+            params: { top_n: topN, include_insights: true },
+            timeout: 30000
+          });
+
+          if (response.data?.success && response.data?.report) {
+            const report = response.data.report;
+            return {
+              summary: report.summary || { burst_alerts: 0 },
+              topPerformers: report.top_performers || [],
+              needsAttention: report.needs_attention || [],
+              insights: report.insights || [],
+              generatedAt: response.data.generated_at || new Date().toISOString()
+            };
+          }
+        } catch (mlError: any) {
+          console.warn('[IntelligenceService] ML weekly report failed:', mlError.message);
+        }
+      }
+
+      // Fallback: Generate report from local data
+      return await this.generateLocalWeeklyReport(userId, topN);
     } catch (error) {
       console.error('[IntelligenceService] Weekly report error:', error);
       return {
@@ -320,6 +337,106 @@ class IntelligenceService {
         generatedAt: new Date().toISOString()
       };
     }
+  }
+
+  private async generateLocalWeeklyReport(userId: string, topN: number) {
+    try {
+      // Get all user products
+      const products = await prisma.products.findMany({
+        where: { user_id: userId, is_active: true },
+        select: { id: true, name: true }
+      });
+
+      const topPerformers: any[] = [];
+      const needsAttention: any[] = [];
+      let burstCount = 0;
+
+      for (const product of products) {
+        try {
+          const salesData = await getSalesData(userId, product.id, 14);
+          if (salesData.length >= 5) {
+            const momentum = this.calculateMomentum(salesData);
+            const burst = this.detectBurst(salesData);
+            const total = salesData.reduce((sum, s) => sum + Number(s.quantity), 0);
+
+            const productReport = {
+              product_id: product.id,
+              product_name: product.name,
+              total_sales: total,
+              momentum: momentum,
+              burst: {
+                level: burst.severity,
+                score: burst.score
+              }
+            };
+
+            // Categorize by momentum
+            if (momentum.status === 'TRENDING_UP' || momentum.status === 'GROWING') {
+              topPerformers.push(productReport);
+            }
+            if (momentum.status === 'DECLINING' || momentum.status === 'FALLING') {
+              needsAttention.push(productReport);
+            }
+            if (burst.severity === 'HIGH' || burst.severity === 'CRITICAL') {
+              burstCount++;
+            }
+          }
+        } catch (err) {
+          console.error(`[WeeklyReport] Error for ${product.id}:`, err);
+        }
+      }
+
+      // Sort by total sales
+      topPerformers.sort((a, b) => b.total_sales - a.total_sales);
+      needsAttention.sort((a, b) => a.momentum.combined - b.momentum.combined);
+
+      return {
+        summary: {
+          burst_alerts: burstCount,
+          total_products: products.length,
+          trending_up: topPerformers.length,
+          needs_attention: needsAttention.length
+        },
+        topPerformers: topPerformers.slice(0, topN),
+        needsAttention: needsAttention.slice(0, topN),
+        insights: this.generateInsights(topPerformers, needsAttention, burstCount),
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('[IntelligenceService] Local report error:', error);
+      return {
+        summary: { burst_alerts: 0 },
+        topPerformers: [],
+        needsAttention: [],
+        insights: [],
+        generatedAt: new Date().toISOString()
+      };
+    }
+  }
+
+  private generateInsights(topPerformers: any[], needsAttention: any[], burstCount: number): string[] {
+    const insights: string[] = [];
+
+    if (topPerformers.length > 0) {
+      insights.push(`${topPerformers.length} produk menunjukkan tren naik`);
+      if (topPerformers[0]) {
+        insights.push(`${topPerformers[0].product_name} adalah produk dengan performa terbaik`);
+      }
+    }
+
+    if (needsAttention.length > 0) {
+      insights.push(`${needsAttention.length} produk membutuhkan perhatian (tren turun)`);
+    }
+
+    if (burstCount > 0) {
+      insights.push(`${burstCount} produk mengalami lonjakan penjualan`);
+    }
+
+    if (insights.length === 0) {
+      insights.push('Performa produk stabil minggu ini');
+    }
+
+    return insights;
   }
 
   async getTrendingProducts(userId: string) {
