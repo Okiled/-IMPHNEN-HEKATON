@@ -92,6 +92,14 @@ app.use((0, cors_1.default)({
 // Body parser with size limit
 app.use(express_1.default.json({ limit: '10mb' }));
 app.use(express_1.default.urlencoded({ extended: true, limit: '10mb' }));
+// Add cache headers for API responses
+app.use('/api', (req, res, next) => {
+    // Cache GET requests for 30 seconds (stale-while-revalidate for 60s)
+    if (req.method === 'GET') {
+        res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
+    }
+    next();
+});
 // Request logging
 app.use(logger_1.requestLogger);
 // Auth middleware

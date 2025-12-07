@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/Badge';
 import Navbar from '@/components/ui/Navbar';
 import { Package, Plus, TrendingUp, TrendingDown, Minus, PackageOpen, BarChart3, List, ChevronRight, Sparkles, Trash2, ChevronLeft } from "lucide-react";
 import { API_URL } from "@/lib/api";
-import { getToken, getUserId, clearAuth, getAuthHeaders, handleAuthError, requireAuth } from "@/lib/auth";
+import { getUserId, getAuthHeaders, handleAuthError, requireAuth } from "@/lib/auth";
 import { sanitizeProductName, sanitizeNumber } from "@/lib/sanitize";
 import { logger } from "@/lib/logger";
+import { useProducts } from "@/hooks/useProducts";
 
 const UNIT_OPTIONS = [
   { value: 'pcs', label: 'Pcs' },
@@ -47,8 +48,7 @@ const ITEMS_PER_PAGE = 10;
 
 export default function ProductsPage() {
   const router = useRouter();
-  const [products, setProducts] = useState<ProductWithAnalytics[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { products, isLoading: loading, addProduct, removeProduct, refresh } = useProducts();
   const [viewMode, setViewMode] = useState<ViewMode>('ranking');
   const [currentPage, setCurrentPage] = useState(1);
   
@@ -65,64 +65,6 @@ export default function ProductsPage() {
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const currentProducts = products.slice(startIndex, endIndex);
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      if (!requireAuth(router)) return;
-      
-      const res = await fetch(`${API_URL}/api/products/ranking`, {
-        headers: getAuthHeaders()
-      });
-
-      if (handleAuthError(res.status, router)) return;
-
-      if (!res.ok) {
-        // Check if response is HTML (404 page)
-        const contentType = res.headers.get('content-type');
-        if (contentType?.includes('text/html')) {
-          throw new Error(`Route tidak ditemukan (404). Backend mungkin perlu restart.`);
-        }
-        const errorText = await res.text();
-        try {
-          const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.error || `HTTP ${res.status}`);
-        } catch {
-          throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 100)}`);
-        }
-      }
-
-      const data = await res.json();
-      if (data.success) {
-        setProducts(data.data || []);
-      }
-    } catch (err) {
-      logger.error('Fetch products error:', err);
-      // Fallback to regular endpoint
-      try {
-        const res = await fetch(`${API_URL}/api/products`, {
-          headers: getAuthHeaders()
-        });
-        const data = await res.json();
-        if (data.success) {
-          setProducts((data.data || []).map((p: any) => ({
-            ...p,
-            analytics: null,
-            sparkline: [],
-            totalSales7d: 0
-          })));
-        }
-      } catch (e) {
-        logger.error('Fallback fetch error:', e);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
 
   // Validation regex patterns
   const PRODUCT_NAME_REGEX = /^[a-zA-Z0-9\s\-\_\.\,]+$/;
@@ -223,12 +165,12 @@ export default function ProductsPage() {
 
       // Optimistic update - langsung tambah ke UI
       if (result.data) {
-        setProducts(prev => [{
+        addProduct({
           ...result.data,
           analytics: null,
           sparkline: [],
           totalSales7d: 0
-        }, ...prev]);
+        });
       }
 
       setName('');
@@ -257,12 +199,12 @@ export default function ProductsPage() {
     setDeletingId(productId);
     setError('');
     
-    const previousProducts = [...products];
-    setProducts(prev => prev.filter(p => p.id !== productId));
+    // Optimistic delete
+    removeProduct(productId);
     
     try {
       if (!requireAuth(router)) {
-        setProducts(previousProducts);
+        refresh(); // Rollback
         return;
       }
 
@@ -272,12 +214,12 @@ export default function ProductsPage() {
       });
 
       if (handleAuthError(res.status, router)) {
-        setProducts(previousProducts);
+        refresh(); // Rollback
         return;
       }
 
       if (!res.ok) {
-        setProducts(previousProducts); // Rollback on error
+        refresh(); // Rollback on error
         const contentType = res.headers.get('content-type');
         if (contentType?.includes('text/html')) {
           throw new Error('Route tidak ditemukan (404). Backend mungkin perlu restart.');
@@ -297,13 +239,12 @@ export default function ProductsPage() {
       const result = await res.json();
       
       if (!result.success) {
-        setProducts(previousProducts); // Rollback on error
+        refresh(); // Rollback on error
         setError(result.error || 'Gagal menghapus produk');
       }
-      // Success - UI sudah terupdate
     } catch (err: any) {
       logger.error('Delete error:', err);
-      setProducts(previousProducts);
+      refresh(); // Rollback
       setError(`Gagal menghapus: ${err.message || 'Network error'}`);
     } finally {
       setDeletingId(null);
