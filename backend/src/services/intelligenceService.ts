@@ -109,7 +109,7 @@ class IntelligenceService {
 
   private getRuleBasedPredictions(salesData: SalesPoint[], days: number) {
     const data = this.normalizeSales(salesData);
-    const predictions = [];
+    const predictions: { date: string; predicted_quantity: number; confidence: string; lower_bound: number; upper_bound: number; }[] = [];
     const anchor = data.length ? new Date(data[data.length - 1].date) : new Date();
 
     // Calculate baseline and trend
@@ -279,7 +279,7 @@ class IntelligenceService {
         else if (last < first * 0.95) trend = 'DECREASING';
     }
 
-    const recommendations = [];
+    const recommendations: { type: string; priority: 'URGENT' | 'HIGH' | 'MEDIUM' | 'LOW'; message: string; actionable: boolean; action: string; details: string[]; }[] = [];
     const avgPerDay = totalPrediction / days;
     
     if (momentum.status === 'TRENDING_UP' || momentum.status === 'GROWING') {

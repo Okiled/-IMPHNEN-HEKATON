@@ -74,7 +74,7 @@ export const generateBurstAnalytics = async (userId: string, date: Date) => {
     }
 
     // 5. Update or create daily_analytics records
-    const updates = [];
+    const updates: any[] = [];
 
     for (const product of products) {
       const mlData = mlDataMap.get(product.id);

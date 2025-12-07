@@ -439,7 +439,7 @@ export const getProductTrend = async (req: Request, res: Response) => {
     }));
 
     const resolvedName = productId
-      ? productName ?? sales.find((s) => s.products?.name)?.products?.name ?? 'Produk'
+      ? productName ?? sales.find((s: typeof sales[0]) => s.products?.name)?.products?.name ?? 'Produk'
       : 'Semua Produk';
 
     return res.json({
