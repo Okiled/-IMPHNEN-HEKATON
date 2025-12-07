@@ -1,9 +1,9 @@
-import { Prisma, PrismaClient } from '@prisma/client'
+import { PrismaClient, datasets, products, sales, daily_analytics } from '@prisma/client'
 
-export type Dataset = Prisma.datasetsGetPayload<{}>
-export type Product = Prisma.productsGetPayload<{}>
-export type Sale = Prisma.salesGetPayload<{}>
-export type DailyAnalytics = Prisma.daily_analyticsGetPayload<{}>
+export type Dataset = datasets
+export type Product = products
+export type Sale = sales
+export type DailyAnalytics = daily_analytics
 
 export type DateRange = { startDate: Date; endDate: Date }
 
