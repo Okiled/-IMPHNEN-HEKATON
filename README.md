@@ -1,4 +1,4 @@
-# 🎯 MEGAWAI PROJECT
+# 🎯 MEGAWAI AI
 
 Hackathon project with full-stack implementation using modern web technologies and machine learning prediction using XGBoost.
 
