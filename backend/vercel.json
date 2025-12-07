@@ -1,19 +1,15 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "src/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["lib/**", "prisma/**"]
-      }
+  "functions": {
+    "src/index.ts": {
+      "runtime": "@vercel/node@3",
+      "includeFiles": "lib/**,prisma/**"
     }
-  ],
-  "routes": [
+  },
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "src/index.ts"
+      "source": "/(.*)",
+      "destination": "/src/index.ts"
     }
-  ],
-  "installCommand": "npm install && npx prisma db pull && npx prisma generate"
+  ]
 }
