@@ -199,19 +199,45 @@ export const getSalesData = async (req: Request, res: Response) => {
 
     // Build query filters
     const where: any = { user_id: userId };
-    
+
     if (product_id) {
       where.product_id = String(product_id);
     }
-    
-    if (start_date || end_date) {
-      where.sale_date = {};
-      if (start_date) {
-        where.sale_date.gte = new Date(String(start_date));
+
+    // Date validation helper
+    const parseAndValidateDate = (dateStr: unknown, fieldName: string): Date | null => {
+      if (!dateStr) return null;
+      const date = new Date(String(dateStr));
+      if (isNaN(date.getTime())) {
+        throw new Error(`Format ${fieldName} tidak valid. Gunakan format YYYY-MM-DD`);
       }
-      if (end_date) {
-        where.sale_date.lte = new Date(String(end_date));
+      return date;
+    };
+
+    try {
+      if (start_date || end_date) {
+        where.sale_date = {};
+        if (start_date) {
+          const parsedStart = parseAndValidateDate(start_date, 'start_date');
+          if (parsedStart) where.sale_date.gte = parsedStart;
+        }
+        if (end_date) {
+          const parsedEnd = parseAndValidateDate(end_date, 'end_date');
+          if (parsedEnd) where.sale_date.lte = parsedEnd;
+        }
+        // Validate date range
+        if (where.sale_date.gte && where.sale_date.lte && where.sale_date.gte > where.sale_date.lte) {
+          return res.status(400).json({
+            success: false,
+            error: 'start_date harus lebih awal dari end_date'
+          });
+        }
       }
+    } catch (dateError) {
+      return res.status(400).json({
+        success: false,
+        error: dateError instanceof Error ? dateError.message : 'Format tanggal tidak valid'
+      });
     }
 
     // Query sales data
@@ -469,11 +495,23 @@ export const createBulkSales = async (req: Request, res: Response) => {
       }
     });
 
-    // Don't await all analysis - let them run in background
-    Promise.all(analysisPromises).catch(console.error);
+    // Run background analysis with proper error handling
+    // Using setImmediate to ensure response is sent first
+    setImmediate(async () => {
+      try {
+        await Promise.allSettled(analysisPromises);
+        console.log(`[BulkSales] Background analysis completed for ${validEntries.length} products`);
+      } catch (err) {
+        console.error('[BulkSales] Background analysis failed:', err);
+      }
 
-    // Trigger burst analytics
-    generateBurstAnalytics(userId, saleDateObj).catch(console.error);
+      try {
+        await generateBurstAnalytics(userId, saleDateObj);
+        console.log(`[BulkSales] Burst analytics completed for date ${saleDateObj.toISOString()}`);
+      } catch (err) {
+        console.error('[BulkSales] Burst analytics failed:', err);
+      }
+    });
 
     res.status(201).json({
       success: true,

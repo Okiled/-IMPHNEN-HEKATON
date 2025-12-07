@@ -48,13 +48,38 @@ app = FastAPI(
     version="1.1.0"
 )
 
-# CORS
+# CORS - SECURITY FIX: Configure allowed origins from environment
+def get_allowed_origins() -> List[str]:
+    """Get allowed CORS origins from environment or use defaults"""
+    env_origins = os.getenv("ALLOWED_ORIGINS", "")
+    if env_origins:
+        return [origin.strip() for origin in env_origins.split(",")]
+
+    # Default allowed origins
+    if os.getenv("ENV", "development") == "production":
+        # In production, only allow specific origins
+        return [
+            os.getenv("FRONTEND_URL", "https://megaw-ai.vercel.app"),
+            os.getenv("BACKEND_URL", "https://api.megaw-ai.com"),
+        ]
+
+    # In development, allow localhost
+    return [
+        "http://localhost:3000",
+        "http://localhost:5000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5000",
+    ]
+
+allowed_origins = get_allowed_origins()
+logger.info(f"CORS allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Internal-API-Key"],
 )
 
 # Initialize components
