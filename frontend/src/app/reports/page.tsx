@@ -69,20 +69,19 @@ export default function ReportsPage() {
     setIsAuthenticated(true);
   }, [router]);
 
-  const loadData = async () => {
+  const loadReport = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchWithAuth(`${API_URL}/api/reports/weekly`);
+      const res = await fetchWithAuth('http://localhost:5000/api/reports/weekly');
       const data = await res.json();
       if (data.success) {
         setReport(data.data);
       } else {
-        setError(data.error || 'Gagal memuat data');
+        setError(data.error || 'Gagal memuat laporan');
       }
     } catch (err) {
-      logger.error('Reports fetch error:', err);
-      setError('Gagal menghubungi server');
+      setError('Terjadi kesalahan');
     } finally {
       setLoading(false);
     }
@@ -93,64 +92,24 @@ export default function ReportsPage() {
     loadData();
   }, [isAuthenticated]);
 
-  const formatRupiah = (num: number) => {
-    if (!num && num !== 0) return 'Rp 0';
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(num);
-  };
-
   const formatDate = (dateStr: string) => {
     try {
       return new Date(dateStr).toLocaleDateString('id-ID', {
-        weekday: 'short',
         day: 'numeric',
-        month: 'short'
+        month: 'short',
+        year: 'numeric'
       });
     } catch {
       return dateStr;
     }
   };
 
-  const getMomentumIcon = (momentum?: string) => {
-    if (!momentum) return <Minus className="w-4 h-4 text-gray-400" />;
-    switch (momentum) {
-      case 'TRENDING_UP':
-      case 'GROWING':
-        return <TrendingUp className="w-4 h-4 text-green-500" />;
-      case 'FALLING':
-      case 'DECLINING':
-        return <TrendingDown className="w-4 h-4 text-red-500" />;
-      default:
-        return <Minus className="w-4 h-4 text-gray-400" />;
-    }
-  };
-
-  const getMomentumBadge = (momentum?: string, value?: number) => {
-    if (!momentum) return <Badge className="bg-gray-100 text-gray-600">➡️ Stabil</Badge>;
-    const pct = ((value || 0) * 100).toFixed(1);
-    switch (momentum) {
-      case 'TRENDING_UP':
-        return <Badge className="bg-green-100 text-green-700">📈 +{pct}%</Badge>;
-      case 'GROWING':
-        return <Badge className="bg-emerald-50 text-emerald-600">↗ +{pct}%</Badge>;
-      case 'FALLING':
-        return <Badge className="bg-red-100 text-red-700">📉 {pct}%</Badge>;
-      case 'DECLINING':
-        return <Badge className="bg-orange-100 text-orange-700">↘ {pct}%</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-600">➡️ Stabil</Badge>;
-    }
-  };
-
-  const getPriorityBadge = (priority?: string, status?: string) => {
-    const displayStatus = status || 'Unknown';
-    switch (priority) {
-      case 'critical':
-        return <Badge className="bg-red-500 text-white animate-pulse">🔥 {displayStatus}</Badge>;
-      case 'high':
-        return <Badge className="bg-orange-500 text-white">⚡ {displayStatus}</Badge>;
-      default:
-        return <Badge className="bg-yellow-100 text-yellow-700">⚠️ {displayStatus}</Badge>;
-    }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0
+    }).format(amount);
   };
 
   if (!isAuthenticated) {
@@ -173,28 +132,30 @@ export default function ReportsPage() {
     );
   }
 
-  if (error || !report) {
+  if (error) {
     return (
       <div className={`min-h-screen ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <Navbar />
-        <div className="max-w-5xl mx-auto px-4 py-8 text-center">
-          <div className="bg-white rounded-lg shadow p-8">
-            <AlertTriangle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
-            <p className="text-gray-600 mb-4">{error || 'Gagal memuat laporan.'}</p>
-            <Button onClick={loadData}>Coba Lagi</Button>
-          </div>
+        <div className="flex flex-col items-center justify-center h-[60vh]">
+          <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+          <p className="text-gray-700 mb-4">{error}</p>
+          <Button onClick={loadReport}>Coba Lagi</Button>
         </div>
       </div>
     );
   }
 
-  // Safe defaults
-  const statusCounts = report.statusCounts || { trending_up: 0, growing: 0, stable: 0, declining: 0, falling: 0 };
-  const totalStatusCount = Object.values(statusCounts).reduce((a, b) => a + b, 0);
-  const dailyData = report.dailyData || [];
-  const insights = report.insights || [];
-  const quantityChange = report.summary.quantityChange ?? 0;
-  const revenueChange = report.summary.revenueChange ?? 0;
+  if (!report) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center h-[60vh]">
+          <Package className="w-12 h-12 text-gray-300 mb-4" />
+          <p className="text-gray-500">Belum ada data</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen selection:bg-red-600 selection:text-white transition-colors duration-300 ${
@@ -209,7 +170,7 @@ export default function ReportsPage() {
             <div className={`flex items-center gap-2 mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
               <Calendar className="h-4 w-4" />
               <span className="text-sm">
-                Periode: {formatDate(report.dateRange.start)} - {formatDate(report.dateRange.end)}
+                {formatDate(report.dateRange.start)} - {formatDate(report.dateRange.end)}
               </span>
             </div>
           </div>
@@ -387,9 +348,7 @@ export default function ReportsPage() {
           </Card>
         </div>
 
-        {/* Two Column Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
           {/* Top Performers */}
           <Card>
             <CardHeader className={`pb-3 border-b ${theme === "dark" ? "border-gray-700" : "border-gray-100"}`}>
@@ -398,8 +357,8 @@ export default function ReportsPage() {
                 <h3 className={`text-lg font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Top Performers</h3>
               </div>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
-              {!report.topPerformers || report.topPerformers.length === 0 ? (
+            <CardContent className="p-0">
+              {report.topPerformers.length === 0 ? (
                 <div className="text-center py-8">
                   <Trophy className={`w-12 h-12 mx-auto mb-2 ${theme === "dark" ? "text-gray-600" : "text-gray-300"}`} />
                   <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Belum ada data penjualan.</p>
@@ -426,9 +385,8 @@ export default function ReportsPage() {
                         </div>
                       </div>
                     </div>
-                    {getMomentumBadge(prod.momentum, prod.momentumValue)}
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -469,7 +427,6 @@ export default function ReportsPage() {
               )}
             </CardContent>
           </Card>
-
         </div>
 
         {/* Full Product Breakdown */}
@@ -517,10 +474,10 @@ export default function ReportsPage() {
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   );
 }

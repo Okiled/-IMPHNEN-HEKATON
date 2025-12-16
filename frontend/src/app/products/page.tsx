@@ -30,17 +30,10 @@ interface ProductWithAnalytics {
   id: string;
   name: string;
   unit: string;
-  price: number | null;
-  analytics: {
-    momentum_combined: number;
-    momentum_label: string;
-    burst_score: number;
-    burst_level: string;
-    priority_score: number;
-    priority_rank: number | null;
-  } | null;
-  sparkline: number[];
-  totalSales7d: number;
+  price?: number;
+  momentum?: { combined: number; status: string };
+  burst?: { score: number; level: string };
+  avgQuantity?: number;
 }
 
 type ViewMode = 'grid' | 'ranking';
@@ -57,9 +50,9 @@ export default function ProductsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   
   const [name, setName] = useState('');
-  const [unit, setUnit] = useState(''); 
+  const [unit, setUnit] = useState('pcs');
   const [price, setPrice] = useState('');
-  const [error, setError] = useState('');
+  const [showForm, setShowForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -165,26 +158,61 @@ export default function ProductsPage() {
   const PRODUCT_NAME_MIN_LENGTH = 2;
   const PRODUCT_NAME_MAX_LENGTH = 100;
 
-  const validateProductName = (value: string): string | null => {
-    const trimmed = value.trim();
-    
-    if (!trimmed) {
-      return "Nama produk tidak boleh kosong";
+      if (!token || !userId) {
+        router.push('/login');
+        return;
+      }
+      
+      const res = await fetch(`http://localhost:5000/api/products?user_id=${userId}`, {
+        headers: getAuthHeaders() 
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('token'); 
+        router.push('/login'); 
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.data || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    
-    if (trimmed.length < PRODUCT_NAME_MIN_LENGTH) {
-      return `Nama produk minimal ${PRODUCT_NAME_MIN_LENGTH} karakter`;
+  };
+
+  const fetchAnalytics = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/analytics/ranking', {
+        headers: getAuthHeaders()
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.rankings) {
+          setProducts(prev => prev.map(p => {
+            const analytics = data.rankings.find((r: any) => r.productId === p.id);
+            if (analytics) {
+              return {
+                ...p,
+                momentum: analytics.momentum,
+                burst: analytics.burst,
+                avgQuantity: analytics.avgQuantity
+              };
+            }
+            return p;
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching analytics:', err);
+    } finally {
+      setLoadingAnalytics(false);
     }
-    
-    if (trimmed.length > PRODUCT_NAME_MAX_LENGTH) {
-      return `Nama produk maksimal ${PRODUCT_NAME_MAX_LENGTH} karakter`;
-    }
-    
-    if (!PRODUCT_NAME_REGEX.test(trimmed)) {
-      return "Nama produk hanya boleh huruf, angka, spasi, dan tanda (-_.,)";
-    }
-    
-    return null;
   };
 
   const validatePrice = (value: string): string | null => {
@@ -206,6 +234,12 @@ export default function ProductsPage() {
     
     return null;
   };
+
+  useEffect(() => {
+    if (products.length > 0) {
+      fetchAnalytics();
+    }
+  }, [products.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,9 +272,9 @@ export default function ProductsPage() {
         headers: getAuthHeaders(),
         body: JSON.stringify({
           user_id: userId,
-          name: sanitizedName,
+          name: name.trim(),
           unit: unit,
-          price: price ? sanitizeNumber(price) : null
+          price: price ? parseFloat(price) : null
         })
       });
 
@@ -265,8 +299,10 @@ export default function ProductsPage() {
       }
 
       setName('');
-      setUnit(''); 
+      setUnit('pcs');
       setPrice('');
+      setShowForm(false);
+      fetchProducts();
       
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan");
@@ -410,14 +446,10 @@ export default function ProductsPage() {
     }).join(' ');
 
     return (
-      <svg width={width} height={height} className="inline-block">
-        <polyline
-          fill="none"
-          stroke="#DC2626"
-          strokeWidth="1.5"
-          points={points}
-        />
-      </svg>
+      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.color}`}>
+        {cfg.icon}
+        {cfg.text}
+      </span>
     );
   };
 
@@ -478,6 +510,22 @@ export default function ProductsPage() {
               </Badge>
             </div>
           </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline">{products.length} Produk</Badge>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => { fetchProducts(); fetchAnalytics(); }}
+            >
+              <RefreshCcw className={`w-4 h-4 mr-2 ${loadingAnalytics ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Tambah
+            </Button>
+          </div>
+        </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
             <div className="lg:col-span-3">
@@ -836,11 +884,11 @@ export default function ProductsPage() {
                       </button>
                     </div>
                   )}
-                </div>
-              )}
-            </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

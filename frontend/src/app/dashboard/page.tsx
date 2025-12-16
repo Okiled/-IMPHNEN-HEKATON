@@ -15,20 +15,6 @@ import { logger } from "@/lib/logger";
 import { useTheme } from "@/lib/theme-context";
 import { useNotification } from "@/components/ui/NotificationToast";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08 }
-  }
-};
-
-const itemVariants = {
-  hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3 } }
-};
-
-// --- Tipe Data Sesuai Response API [1] ---
 type DashboardSummary = {
   today: {
     total_quantity: number;
@@ -75,14 +61,15 @@ export default function DashboardPage() {
 
   const fetchProducts = async () => {
     try {
-      const token = getToken();
-      const res = await fetch(`${API_URL}/api/products`, {
-        headers: { Authorization: token ? `Bearer ${token}` : "" },
+      const res = await fetch("http://localhost:5000/api/products", {
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
       if (data.success) {
         setProducts(data.data || []);
-        if (!selectedId && data.data?.length > 0) setSelectedId(data.data[0].id);
+        if (!selectedId && data.data?.length > 0 && !searchParams.get('product')) {
+          setSelectedId(data.data[0].id);
+        }
       }
     } catch (err) {
       logger.error("Gagal load produk:", err);
@@ -90,21 +77,19 @@ export default function DashboardPage() {
   };
 
   const fetchSummary = async () => {
-    setLoading(true);
+    setLoadingSummary(true);
     try {
-      const token = getToken();
-      const res = await fetch(`${API_URL}/api/analytics/summary`, {
-        headers: { Authorization: token ? `Bearer ${token}` : "" },
+      const res = await fetch("http://localhost:5000/api/analytics/summary", {
+        headers: getAuthHeaders(),
       });
       const data = await res.json();
-      
       if (data.success) {
         setSummary(data.summary);
       }
     } catch (err) {
       logger.error("Gagal load summary:", err);
     } finally {
-      setLoading(false);
+      setLoadingSummary(false);
     }
   };
 
@@ -136,9 +121,20 @@ export default function DashboardPage() {
     });
   }, [summary, notifiedBursts, addNotification]);
 
-  // Helper untuk format Rupiah
+  const handleProductSelect = (productId: string) => {
+    setSelectedId(productId);
+    const url = new URL(window.location.href);
+    url.searchParams.set('product', productId);
+    window.history.pushState({}, '', url);
+  };
+
   const formatRupiah = (num: number) => {
-    return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR" }).format(num);
+    return new Intl.NumberFormat("id-ID", { 
+      style: "currency", 
+      currency: "IDR", 
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(num);
   };
 
   // Don't render if not authenticated
@@ -155,17 +151,19 @@ export default function DashboardPage() {
       theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-slate-900"
     }`}>
       <Navbar />
-      <motion.main 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"
-      >
-        <div className="flex flex-col gap-8">
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+      
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Dashboard</h1>
+            <p className="text-gray-500 mt-1">Pantau performa penjualan & analisis AI</p>
+          </div>
+          <Button 
+            onClick={() => { fetchSummary(); fetchProducts(); }} 
+            variant="outline" 
+            size="sm"
+            className="self-start sm:self-auto"
           >
             <div>
               <h1 className={`text-3xl font-bold tracking-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Dashboard Overview</h1>
@@ -249,24 +247,33 @@ export default function DashboardPage() {
               </motion.div>
             </motion.div>
           )}
+        </div>
 
-          {/* --- BURST ALERT SECTION --- */}
-          {summary?.burst_alerts && summary.burst_alerts.length > 0 && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm animate-pulse">
+        {/* Burst Alert */}
+        {summary?.burst_alerts && summary.burst_alerts.length > 0 && (
+          <Card className="mb-8 border-l-4 border-l-red-500 bg-red-50">
+            <CardContent className="p-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                <div className="p-2 bg-red-100 rounded-full flex-shrink-0">
+                  <Zap className="w-5 h-5 text-red-600" />
+                </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-bold text-red-900">BURST ALERT DETECTED!</h3>
-                  <div className="mt-2 flex flex-col gap-2">
+                  <h3 className="font-semibold text-red-800 mb-2">🚨 Burst Alert</h3>
+                  <div className="space-y-2">
                     {summary.burst_alerts.map((alert) => (
-                      <div key={alert.product_id} className="flex flex-wrap items-center justify-between gap-2 text-sm bg-white/60 p-2 rounded border border-red-100">
-                        <span className="text-red-800">
-                          Produk <strong>{alert.product_name}</strong> mengalami lonjakan (Level: {alert.burst_level})
-                        </span>
-                        <Button
-                          size="sm"
-                          className="h-7 text-xs bg-red-600 hover:bg-red-700 text-white border-0"
-                          onClick={() => setSelectedId(alert.product_id)}
+                      <div 
+                        key={alert.product_id} 
+                        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-white p-3 rounded-lg"
+                      >
+                        <div>
+                          <span className="font-medium text-gray-900">{alert.product_name}</span>
+                          <span className="text-gray-600 ml-2">mengalami lonjakan!</span>
+                          <Badge variant="secondary" className="ml-2 text-xs">{alert.burst_level}</Badge>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="primary"
+                          onClick={() => handleProductSelect(alert.product_id)}
                         >
                           Lihat Analisa
                         </Button>
@@ -275,8 +282,9 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            </CardContent>
+          </Card>
+        )}
 
           {/* --- MAIN CONTENT GRID (SIDEBAR + CHART) --- */}
           <motion.div 
@@ -320,6 +328,7 @@ export default function DashboardPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
 
             {/* Intelligence Dashboard View */}
             <div className="lg:col-span-10">
@@ -357,7 +366,7 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         </div>
-      </motion.main>
+      </main>
     </div>
   );
 }

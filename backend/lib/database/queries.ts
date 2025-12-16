@@ -112,7 +112,7 @@ export async function upsertProductsForDataset(
   userId: string,
   datasetId: string,
   products: { name: string; category?: string | null; unit?: string | null }[],
-): Promise<Product[]> {
+): Promise<any[]> {
   try {
     if (!userId) {
       throw new Error('userId is required')
@@ -160,8 +160,8 @@ export async function upsertProductsForDataset(
       },
     })
 
-    const existingByName = new Map<string, Product>(
-      existingProducts.map((product: Product) => [product.name, product]),
+    const existingByName = new Map<string, any>(
+      existingProducts.map((product: any) => [product.name, product]),
     )
 
     const operations = productNames.map((name) => {
@@ -232,12 +232,9 @@ export async function bulkUpsertSales(
     console.log(`[BulkUpsert] Starting: ${rows.length} rows`)
     const startTime = Date.now()
 
-    // Run dataset check in parallel with product name extraction
-    const [, productNames] = await Promise.all([
-      ensureDatasetForUser(userId, datasetId),
-      Promise.resolve(Array.from(new Set(rows.map(r => r.productName))))
-    ])
-    console.log(`[BulkUpsert] Dataset + ${productNames.length} unique products: ${Date.now() - startTime}ms`)
+      const existingByName = new Map<string, any>(
+        existingProducts.map((product: any) => [product.name, product]),
+      )
 
     // 1. Get existing products in ONE query
     const existingProducts = await prisma.products.findMany({
@@ -343,10 +340,12 @@ export async function bulkUpsertSales(
       })
     }
 
-    if (!salesData.length) {
-      console.log(`[BulkUpsert] No valid sales data`)
-      return
-    }
+      const productIdByName = new Map<string, string>(
+        productsForRows.map((product: any) => [product.name, product.id]),
+      )
+
+      for (const row of rows) {
+        const productId = productIdByName.get(row.productName)
 
     // 4. OPTIMIZED: Use raw SQL for bulk delete (much faster than Prisma OR queries)
     // Group by product_id for efficient deletion
@@ -405,7 +404,7 @@ export async function getAnalyticsOverview(
   userId: string,
   datasetId: string,
   range: DateRange,
-): Promise<DailyAnalytics[]> {
+): Promise<any[]> {
   try {
     if (!userId) {
       throw new Error('userId is required')
@@ -448,7 +447,7 @@ export async function getProductAnalytics(
   datasetId: string,
   productId: string,
   range: DateRange,
-): Promise<DailyAnalytics[]> {
+): Promise<any[]> {
   try {
     if (!userId) {
       throw new Error('userId is required')
@@ -633,7 +632,7 @@ export async function getSalesData(
 export async function getLatestAnalytics(
   userId: string,
   productId: string
-): Promise<DailyAnalytics | null> {
+): Promise<any | null> {
   try {
     if (!userId) throw new Error('userId is required');
     if (!productId) throw new Error('productId is required');
@@ -663,7 +662,7 @@ export async function getTopProductsByPriority(
   userId: string,
   limit: number = 10,
   datasetId?: string | null
-): Promise<DailyAnalytics[]> {
+): Promise<any[]> {
   try {
     if (!userId) throw new Error('userId is required');
 
@@ -730,7 +729,7 @@ export async function getProductsWithBurstAlerts(
   userId: string,
   minBurstLevel: string = 'HIGH',
   datasetId?: string | null
-): Promise<DailyAnalytics[]> {
+): Promise<any[]> {
   try {
     if (!userId) throw new Error('userId is required');
 
@@ -865,7 +864,7 @@ export async function bulkUpsertDailyAnalytics(
 export async function getUserProducts(
   userId: string,
   datasetId?: string | null
-): Promise<Product[]> {
+): Promise<any[]> {
   try {
     if (!userId) throw new Error('userId is required');
 

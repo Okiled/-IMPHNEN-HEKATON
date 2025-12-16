@@ -15,25 +15,10 @@ import { useTheme } from "@/lib/theme-context";
 interface Product {
   id: string;
   name: string;
-  unit?: string;
-  price?: number;
+  unit: string;
 }
 
-interface SalesEntry {
-  product_id: string;
-  product_name: string;
-  quantity: number;
-}
-
-function getTodayDate() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-export default function InputPage() {
+export default function InputSalesPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
@@ -138,215 +123,119 @@ export default function InputPage() {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const userId = localStorage.getItem('user_id');
 
-    const allowedTypes = [
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
-      'application/vnd.ms-excel', // xls
-      'text/csv',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
-    ];
+      if (!token || !userId) {
+        router.push('/login');
+        return;
+      }
 
-    if (!allowedTypes.includes(file.type) && !file.name.endsWith('.csv')) {
-      setMessage({ type: 'error', text: 'Format file tidak didukung. Gunakan Excel (.xlsx, .xls), CSV, atau Word (.docx)' });
+      const res = await fetch(`http://localhost:5000/api/products?user_id=${userId}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        router.push('/login');
+        return;
+      }
+
+      const data = await res.json();
+      if (data.success) {
+        setProducts(data.data || []);
+        const initialInputs = new Map<string, number>();
+        (data.data || []).forEach((p: Product) => {
+          initialInputs.set(p.id, 0);
+        });
+        setSalesInputs(initialInputs);
+      }
+    } catch (err) {
+      console.error('Error fetching products:', err);
+      showToast('Gagal memuat produk', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleQuantityChange = (productId: string, quantity: number) => {
+    const newInputs = new Map(salesInputs);
+    newInputs.set(productId, Math.max(0, quantity));
+    setSalesInputs(newInputs);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const salesData = products
+      .filter(p => (salesInputs.get(p.id) || 0) > 0)
+      .map(p => ({
+        product_id: p.id,
+        product_name: p.name,
+        quantity: salesInputs.get(p.id) || 0,
+        sale_date: saleDate
+      }));
+
+    if (salesData.length === 0) {
+      showToast('Masukkan minimal 1 produk dengan quantity > 0', 'error');
       return;
     }
 
-    // Check file size - warn for large files
-    const fileSizeMB = file.size / (1024 * 1024);
-    if (fileSizeMB > 10) {
-      const confirm = window.confirm(`File berukuran ${fileSizeMB.toFixed(1)}MB. File besar akan membutuhkan waktu lebih lama. Lanjutkan?`);
-      if (!confirm) return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-    setMessage({ type: 'success', text: 'Mengupload file...' });
-
-    // Progress simulation based on file size
-    const estimatedTime = Math.max(5000, fileSizeMB * 3000); // ~3s per MB
-    const increment = Math.max(1, Math.round(90 / (estimatedTime / 200)));
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 90) return 90;
-        return Math.min(90, prev + increment);
-      });
-    }, 200);
+    setSubmitting(true);
+    let successCount = 0;
+    let errorCount = 0;
 
     try {
-      const token = getToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('sale_date', saleDate);
+      for (const sale of salesData) {
+        try {
+          const res = await fetch('http://localhost:5000/api/sales', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(sale)
+          });
 
-      // Extended timeout for large files - 5 minutes
-      const controller = new AbortController();
-      const timeoutMs = Math.max(300000, fileSizeMB * 30000); // Min 5min or 30s per MB
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      const res = await fetch(`${API_URL}/api/sales/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      clearInterval(progressInterval);
-      setUploadProgress(95);
-
-      const result = await res.json();
-      setUploadProgress(100);
-
-      if (result.success) {
-        setMessage({ type: 'success', text: `Berhasil! ${result.processed || 0} data diproses dalam background.` });
-        // Delay refresh to let background processing complete
-        setTimeout(() => fetchSalesHistory(), 2000);
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Gagal upload file' });
-      }
-    } catch (err: unknown) {
-      clearInterval(progressInterval);
-      if (err instanceof Error && err.name === 'AbortError') {
-        setMessage({ type: 'error', text: 'Upload timeout - coba lagi atau pecah file menjadi bagian lebih kecil' });
-      } else {
-        setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Gagal upload file' });
-      }
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const MAX_QUANTITY = 99999;
-
-  const handleQuantityChange = (productId: string, value: number) => {
-    // Validate: only positive numbers, max limit
-    const validValue = Math.max(0, Math.min(MAX_QUANTITY, Math.floor(value) || 0));
-    setEntries(prev => ({
-      ...prev,
-      [productId]: validValue
-    }));
-  };
-
-  const validateDate = (dateStr: string): boolean => {
-    const selectedDate = new Date(dateStr);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    
-    // Don't allow future dates
-    if (selectedDate > today) {
-      setMessage({ type: 'error', text: 'Tanggal tidak boleh di masa depan' });
-      return false;
-    }
-    
-    // Don't allow dates more than 1 year ago
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    if (selectedDate < oneYearAgo) {
-      setMessage({ type: 'error', text: 'Tanggal tidak boleh lebih dari 1 tahun lalu' });
-      return false;
-    }
-    
-    return true;
-  };
-
-  const incrementQuantity = (productId: string) => {
-    setEntries(prev => ({
-      ...prev,
-      [productId]: Math.min((prev[productId] || 0) + 1, MAX_QUANTITY)
-    }));
-  };
-
-  const decrementQuantity = (productId: string) => {
-    setEntries(prev => ({
-      ...prev,
-      [productId]: Math.max(0, (prev[productId] || 0) - 1)
-    }));
-  };
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    setMessage(null);
-
-    try {
-      const token = getToken();
-      if (!token) {
-        setMessage({ type: 'error', text: 'Session habis. Login ulang!' });
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Validate date
-      if (!validateDate(saleDate)) {
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Prepare entries data with max limit check
-      const salesEntries: SalesEntry[] = products
-        .filter(p => entries[p.id] > 0)
-        .map(p => ({
-          product_id: p.id,
-          product_name: p.name,
-          quantity: Math.min(entries[p.id], MAX_QUANTITY)
-        }));
-
-      if (salesEntries.length === 0) {
-        setMessage({ type: 'error', text: 'Isi minimal 1 produk dengan quantity > 0' });
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Warn for high quantities
-      const hasHighQty = salesEntries.some(e => e.quantity > 10000);
-      if (hasHighQty) {
-        const confirmHigh = window.confirm('Ada quantity > 10.000. Yakin data sudah benar?');
-        if (!confirmHigh) {
-          setIsSubmitting(false);
-          return;
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch {
+          errorCount++;
         }
       }
 
-      const res = await fetch(`${API_URL}/api/sales/bulk`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          sale_date: saleDate,
-          entries: salesEntries
-        })
-      });
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal menyimpan");
+      if (successCount > 0) {
+        showToast(`${successCount} data berhasil disimpan!`, 'success');
+        const resetInputs = new Map<string, number>();
+        products.forEach(p => resetInputs.set(p.id, 0));
+        setSalesInputs(resetInputs);
       }
 
-      setMessage({ 
-        type: 'success', 
-        text: `✅ ${salesEntries.length} produk berhasil disimpan!` 
-      });
+      if (errorCount > 0) {
+        showToast(`${errorCount} data gagal disimpan`, 'error');
+      }
 
-      // Reset entries to 0
-      const resetEntries: Record<string, number> = {};
-      products.forEach(p => {
-        resetEntries[p.id] = 0;
-      });
-      setEntries(resetEntries);
-
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Terjadi kesalahan' });
+    } catch (err) {
+      showToast('Terjadi kesalahan', 'error');
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  const totalProducts = Object.values(entries).filter(v => v > 0).length;
-  const totalQuantity = Object.values(entries).reduce((a, b) => a + b, 0);
+  const totalItems = Array.from(salesInputs.values()).filter(v => v > 0).length;
+  const totalQuantity = Array.from(salesInputs.values()).reduce((a, b) => a + b, 0);
 
   if (!isAuthenticated) {
     return (
@@ -377,6 +266,9 @@ export default function InputPage() {
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
 
         <div className={`mb-4 p-4 border rounded-xl flex items-start gap-3 ${
           theme === "dark" ? "bg-amber-900/20 border-amber-800" : "bg-amber-50 border-amber-200"
@@ -393,6 +285,7 @@ export default function InputPage() {
             </p>
           </div>
         </div>
+      )}
 
         <div className={`mb-6 p-4 border rounded-xl flex items-start gap-3 ${
           theme === "dark" ? "bg-blue-900/20 border-blue-800" : "bg-blue-50 border-blue-200"
@@ -454,6 +347,13 @@ export default function InputPage() {
                     className="h-full bg-green-500 transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
                   />
+                  <Badge variant="outline" className="text-xs self-start sm:self-auto">
+                    {new Date(saleDate).toLocaleDateString('id-ID', { 
+                      weekday: 'long', 
+                      day: 'numeric',
+                      month: 'short'
+                    })}
+                  </Badge>
                 </div>
               </div>
             )}
@@ -629,6 +529,15 @@ export default function InputPage() {
                       <span className={`text-sm ml-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>total item</span>
                     </div>
                   </div>
+                  <Button 
+                    type="submit" 
+                    variant="secondary"
+                    className="bg-white text-gray-900 hover:bg-gray-100"
+                    isLoading={submitting}
+                    disabled={totalItems === 0}
+                  >
+                    Simpan Penjualan
+                  </Button>
                 </div>
 
                 <Button
@@ -700,7 +609,7 @@ export default function InputPage() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

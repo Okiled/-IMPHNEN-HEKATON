@@ -8,11 +8,12 @@ import { Menu, X, ShoppingBag, User, LogOut, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/lib/theme-context";
 
 const navLinks = [
-  { name: "Beranda", href: "/" },
-  { name: "Produk", href: "/products" },
+  { name: "Home", href: "/" },
   { name: "Dashboard", href: "/dashboard" },
-  { name: "Input Data", href: "/input" },
-  { name: "Laporan", href: "/reports" },
+  { name: "Products", href: "/products" },
+  { name: "Input Sales", href: "/input" },
+  { name: "Ranking", href: "/ranking" },
+  { name: "Reports", href: "/reports" },
 ];
 
 let hasAnimated = false;
@@ -20,36 +21,30 @@ let hasAnimated = false;
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
-
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
 
-  const shouldAnimate = !hasAnimated && pathname === "/";
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
-useEffect(() => {
-  const timer = setTimeout(() => {
-    setIsMounted(true);
-    
+  useEffect(() => {
     const token = localStorage.getItem("token");
     setIsLoggedIn(!!token);
-  }, 0);
+  }, [pathname]);
 
-  hasAnimated = true; 
-
-  const handleScroll = () => {
-    setScrolled(window.scrollY > 20);
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user_id");
+    setIsLoggedIn(false);
+    router.push("/");
   };
-  
-  window.addEventListener("scroll", handleScroll, { passive: true });
-
-  return () => {
-    clearTimeout(timer); 
-    window.removeEventListener("scroll", handleScroll);
-  };
-}, []);
 
   return (
     <>
@@ -69,8 +64,7 @@ useEffect(() => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
-            
-            {/* LOGO */}
+            {/* Logo */}
             <Link href="/" className="flex items-center gap-2 group">
               <div className="w-9 h-9 bg-[#DC2626] rounded-xl flex items-center justify-center text-white transform group-hover:rotate-12 transition-transform duration-300">
                 <ShoppingBag size={18} />
@@ -80,8 +74,8 @@ useEffect(() => {
                 </span>
             </Link>
 
-            {/* DESKTOP MENU */}
-            <div className="hidden md:flex items-center space-x-8">
+            {/* Desktop Menu */}
+            <div className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
@@ -93,12 +87,6 @@ useEffect(() => {
                   }`}
                 >
                   {link.name}
-                  {pathname === link.href && (
-                    <motion.div
-                      layoutId="underline"
-                      className="absolute left-0 top-full mt-1 w-full h-0.5 bg-[#DC2626]"
-                    />
-                  )}
                 </Link>
               ))}
             </div>
@@ -155,16 +143,12 @@ useEffect(() => {
                     href="/login"
                     className={`text-sm font-semibold transition-colors ${theme === "dark" ? "text-gray-300 hover:text-[#DC2626]" : "text-black hover:text-[#DC2626]"}`}
                   >
-                    Masuk
+                    Login
                   </Link>
-                  <Link href="/login?mode=register">
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-5 py-2 bg-[#DC2626] text-white text-sm font-bold rounded-full shadow-lg hover:bg-red-700 transition-colors"
-                    >
-                      Daftar
-                    </motion.button>
+                  <Link href="/login">
+                    <button className="px-4 py-1.5 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition">
+                      Sign Up
+                    </button>
                   </Link>
                 </>
               )}
@@ -276,11 +260,12 @@ useEffect(() => {
                   )}
                 </div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.nav>
-      <div className="h-24" /> 
+            </div>
+          </div>
+        )}
+      </nav>
+      
+      <div className="h-16" />
     </>
   );
 }
