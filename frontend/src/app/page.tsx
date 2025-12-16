@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
 import nextDynamic from "next/dynamic";
-import Navbar from "@/components/ui/Navbar";
 
 // Dynamic import untuk client components (code splitting)
-const HeroSection = nextDynamic(
-  () => import("@/components/landing/HeroSection").then((mod) => mod.HeroSection),
-  { ssr: true }
-);
-
-const FeaturesSection = nextDynamic(
-  () => import("@/components/landing/HeroSection").then((mod) => mod.FeaturesSection),
+const LandingWrapper = nextDynamic(
+  () => import("@/components/landing/LandingWrapper").then((mod) => mod.LandingWrapper),
   { ssr: true }
 );
 
@@ -71,17 +65,7 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      <main className="min-h-screen bg-white text-black selection:bg-[#DC2626] selection:text-white">
-        <Navbar />
-        <HeroSection />
-        <FeaturesSection />
-
-        <footer className="py-8 bg-white border-t border-gray-100 text-center">
-          <p className="text-gray-500">
-            © {new Date().getFullYear()} Megaw AI. All rights reserved.
-          </p>
-        </footer>
-      </main>
+      <LandingWrapper />
     </>
   );
 }

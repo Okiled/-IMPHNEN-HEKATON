@@ -1,4 +1,4 @@
-// Centralized auth utilities untuk menghindari redundant localStorage calls
+// auth utilities
 
 const TOKEN_KEY = 'token';
 const USER_ID_KEY = 'user_id';
@@ -37,27 +37,21 @@ export function getAuthHeaders(): Record<string, string> {
   };
 }
 
-/**
- * Handle authentication errors (401/403) - clear auth and redirect to landing page
- * Returns true if it was an auth error and handled
- */
+// handle error auth (401/403) - hapus token dan redirect ke login
 export function handleAuthError(status: number, router?: { push: (url: string) => void }): boolean {
   if (status === 401 || status === 403) {
     clearAuth();
     if (router) {
-      router.push('/');
+      router.push('/login');
     } else if (typeof window !== 'undefined') {
-      window.location.href = '/';
+      window.location.href = '/login';
     }
     return true;
   }
   return false;
 }
 
-/**
- * Check auth and redirect to login if not authenticated
- * Use this at the start of protected pages
- */
+// cek auth dan redirect ke login jika belum login
 export function requireAuth(router: { push: (url: string) => void }): boolean {
   const token = getToken();
   const userId = getUserId();

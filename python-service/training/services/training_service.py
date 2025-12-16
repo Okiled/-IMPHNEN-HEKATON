@@ -242,6 +242,10 @@ class TrainingService:
         # Train
         result = self.trainer.train(sales_data, product_id)
 
+        # Attach row count to metrics for downstream reporting (non-invasive)
+        if result.metrics is not None:
+            result.metrics = {**result.metrics, "rows": len(sales_data)}
+
         if result.success:
             # Save model
             model_path = os.path.join(

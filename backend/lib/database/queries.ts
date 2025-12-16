@@ -254,11 +254,33 @@ export async function bulkUpsertSales(
       }
     }
 
-    // 2. Create missing products in ONE query
+    // Build price map from rows (for products that have price in input)
+    const inputPriceMap = new Map<string, number>()
+    for (const row of rows) {
+      const key = row.productName.toLowerCase()
+      // Calculate unit price if only totalPrice available
+      let unitPrice = row.price
+      if ((!unitPrice || unitPrice === 0) && row.totalPrice && row.totalPrice > 0 && row.quantity > 0) {
+        unitPrice = Math.round(row.totalPrice / row.quantity)
+      }
+      if (unitPrice && unitPrice > 0 && !inputPriceMap.has(key)) {
+        inputPriceMap.set(key, unitPrice)
+      }
+    }
+
+    // 2. Create missing products in ONE query (with price if available from input)
     const missingNames = productNames.filter(n => !productMap.has(n.toLowerCase()))
     if (missingNames.length) {
       await prisma.products.createMany({
-        data: missingNames.map(name => ({ user_id: userId, dataset_id: datasetId, name })),
+        data: missingNames.map(name => {
+          const priceFromInput = inputPriceMap.get(name.toLowerCase())
+          return { 
+            user_id: userId, 
+            dataset_id: datasetId, 
+            name,
+            price: priceFromInput || null
+          }
+        }),
         skipDuplicates: true,
       })
       const newProducts = await prisma.products.findMany({
@@ -269,6 +291,28 @@ export async function bulkUpsertSales(
         productMap.set(p.name.toLowerCase(), { id: p.id, price: p.price ? Number(p.price) : null })
       }
     }
+    
+    // 2b. Update existing products that don't have price but input has price
+    const productsToUpdatePrice: { id: string; price: number }[] = []
+    for (const [key, product] of productMap) {
+      if (!product.price && inputPriceMap.has(key)) {
+        const newPrice = inputPriceMap.get(key)!
+        productsToUpdatePrice.push({ id: product.id, price: newPrice })
+        product.price = newPrice // Update in map too
+      }
+    }
+    if (productsToUpdatePrice.length > 0) {
+      await Promise.all(
+        productsToUpdatePrice.map(p => 
+          prisma.products.update({
+            where: { id: p.id },
+            data: { price: p.price }
+          })
+        )
+      )
+      console.log(`[BulkUpsert] Updated ${productsToUpdatePrice.length} product prices`)
+    }
+    
     console.log(`[BulkUpsert] Products ready: ${Date.now() - startTime}ms`)
 
     // 3. Build sales data - use object pooling for memory efficiency

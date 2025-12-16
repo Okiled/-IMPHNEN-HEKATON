@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/Badge";
 import { FolderOpen, Calendar, Package, Save, CheckCircle, AlertCircle, Minus, Plus, Upload, FileSpreadsheet, Info, History, Loader2 } from "lucide-react";
 import { API_URL } from "@/lib/api";
 import { getToken, getAuthHeaders, requireAuth } from "@/lib/auth";
-import { logger } from "@/lib/logger"; 
+import { logger } from "@/lib/logger";
+import { useTheme } from "@/lib/theme-context"; 
 
 interface Product {
   id: string;
@@ -34,6 +35,7 @@ function getTodayDate() {
 
 export default function InputPage() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [saleDate, setSaleDate] = useState<string>("");
@@ -41,7 +43,7 @@ export default function InputPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
-  const [salesHistory, setSalesHistory] = useState<Array<{date: string, product_name: string, quantity: number}>>([]);
+  const [salesHistory, setSalesHistory] = useState<Array<{date: string, product_name: string, quantity: number, unit_price?: number | null, revenue?: number | null}>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -69,6 +71,9 @@ export default function InputPage() {
         const res = await fetch(`${API_URL}/api/products`, {
           headers: getAuthHeaders()
         });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const result = await res.json();
         
         if (result.success && Array.isArray(result.data)) {
@@ -87,7 +92,29 @@ export default function InputPage() {
       }
     };
 
-    Promise.all([fetchProducts(), fetchSalesHistory()]);
+    const fetchHistory = async () => {
+      try {
+        const token = getToken();
+        if (!token) return;
+
+        const res = await fetch(`${API_URL}/api/sales/history?limit=20`, {
+          headers: getAuthHeaders()
+        });
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const result = await res.json();
+        
+        if (result.success && Array.isArray(result.data)) {
+          setSalesHistory(result.data);
+        }
+      } catch (err) {
+        logger.error("Gagal load history", err);
+      }
+    };
+
+    fetchProducts();
+    fetchHistory();
   }, [isMounted, router]); 
 
   const fetchSalesHistory = async () => {
@@ -98,6 +125,9 @@ export default function InputPage() {
       const res = await fetch(`${API_URL}/api/sales/history?limit=20`, {
         headers: getAuthHeaders()
       });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const result = await res.json();
       
       if (result.success && Array.isArray(result.data)) {
@@ -318,44 +348,45 @@ export default function InputPage() {
   const totalProducts = Object.values(entries).filter(v => v > 0).length;
   const totalQuantity = Object.values(entries).reduce((a, b) => a + b, 0);
 
-  // Don't render if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 text-black selection:bg-[#DC2626] selection:text-white">
+    <main className={`min-h-screen selection:bg-[#DC2626] selection:text-white transition-colors duration-300 ${
+      theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-black"
+    }`}>
       <Navbar />
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-red-100 rounded-lg">
+            <div className={`p-2 rounded-lg ${theme === "dark" ? "bg-red-900/30" : "bg-red-100"}`}>
               <FolderOpen className="text-[#DC2626]" size={24} />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-black tracking-tight">
+              <h1 className={`text-xl font-bold tracking-tight ${theme === "dark" ? "text-white" : "text-black"}`}>
                 Input Penjualan Harian
               </h1>
-              <p className="text-gray-500 text-sm">
+              <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                 Masukkan jumlah terjual untuk setiap produk
               </p>
             </div>
           </div>
         </div>
 
-        {/* Warning Banner - Daftar produk dulu */}
-        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+        <div className={`mb-4 p-4 border rounded-xl flex items-start gap-3 ${
+          theme === "dark" ? "bg-amber-900/20 border-amber-800" : "bg-amber-50 border-amber-200"
+        }`}>
+          <AlertCircle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${theme === "dark" ? "text-amber-400" : "text-amber-600"}`} />
           <div>
-            <p className="text-amber-800 font-medium text-sm">Penting: Daftarkan Produk Terlebih Dahulu</p>
-            <p className="text-amber-700 text-sm mt-1">
+            <p className={`font-medium text-sm ${theme === "dark" ? "text-amber-300" : "text-amber-800"}`}>Penting: Daftarkan Produk Terlebih Dahulu</p>
+            <p className={`text-sm mt-1 ${theme === "dark" ? "text-amber-400/80" : "text-amber-700"}`}>
               Sebelum input data penjualan, pastikan semua produk sudah didaftarkan di{' '}
-              <a href="/products" className="underline font-medium hover:text-amber-900">
+              <a href="/products" className={`underline font-medium ${theme === "dark" ? "hover:text-amber-300" : "hover:text-amber-900"}`}>
                 halaman Products
               </a>
               . Data penjualan hanya akan diproses untuk produk yang sudah terdaftar.
@@ -363,27 +394,27 @@ export default function InputPage() {
           </div>
         </div>
 
-        {/* Info Banner - 30 hari untuk AI */}
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className={`mb-6 p-4 border rounded-xl flex items-start gap-3 ${
+          theme === "dark" ? "bg-blue-900/20 border-blue-800" : "bg-blue-50 border-blue-200"
+        }`}>
+          <Info className={`w-5 h-5 mt-0.5 flex-shrink-0 ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`} />
           <div>
-            <p className="text-blue-800 font-medium text-sm">Tips untuk hasil AI yang optimal</p>
-            <p className="text-blue-600 text-sm mt-1">
+            <p className={`font-medium text-sm ${theme === "dark" ? "text-blue-300" : "text-blue-800"}`}>Tips untuk hasil AI yang optimal</p>
+            <p className={`text-sm mt-1 ${theme === "dark" ? "text-blue-400/80" : "text-blue-600"}`}>
               Disarankan input data penjualan minimal <strong>30 hari berturut-turut</strong> agar AI dapat menganalisis pola dan memberikan prediksi yang lebih akurat.
             </p>
           </div>
         </div>
 
-        {/* Upload File Card */}
         <Card className="mb-6 border-l-4 border-l-green-500">
           <CardContent className="p-4">
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
-                <FileSpreadsheet className="w-5 h-5 text-green-600" />
+                <FileSpreadsheet className={`w-5 h-5 ${theme === "dark" ? "text-green-400" : "text-green-600"}`} />
                 <div>
-                  <p className="font-medium text-gray-900">Upload Data Penjualan</p>
-                  <p className="text-gray-500 text-sm">Excel (.xlsx), CSV, atau Word (.docx)</p>
-                  <p className="text-gray-400 text-xs mt-1">
+                  <p className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Upload Data Penjualan</p>
+                  <p className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-500"}`}>Excel (.xlsx), CSV, atau Word (.docx)</p>
+                  <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-400"}`}>
                     Kolom fleksibel: tanggal/date/tgl, nama/produk/menu, qty/jumlah/terjual, harga/price
                   </p>
                 </div>
@@ -418,7 +449,7 @@ export default function InputPage() {
             </div>
             {isUploading && (
               <div className="mt-3">
-                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className={`h-2 rounded-full overflow-hidden ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}>
                   <div 
                     className="h-full bg-green-500 transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
@@ -430,28 +461,30 @@ export default function InputPage() {
           </CardContent>
         </Card>
 
-        {/* Date Picker Card */}
         <Card className="mb-6 border-l-4 border-l-red-500">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-gray-500" />
+                <Calendar className={`w-5 h-5 ${theme === "dark" ? "text-white" : "text-gray-500"}`} style={theme === "dark" ? { color: "white" } : {}} />
                 <div>
-                  <p className="text-sm text-gray-500">Tanggal Penjualan</p>
+                  <p className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-500"}`}>Tanggal Penjualan</p>
                   {saleDate ? (
                     <input
                       type="date"
                       value={saleDate}
                       onChange={(e) => setSaleDate(e.target.value)}
-                      className="font-bold text-lg text-gray-900 bg-transparent border-none focus:outline-none cursor-pointer"
+                      style={theme === "dark" ? { colorScheme: "dark" } : {}}
+                      className={`font-bold text-lg bg-transparent border-none focus:outline-none cursor-pointer ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
                     />
                   ) : (
-                    <div className="h-7 w-32 bg-gray-100 rounded animate-pulse" />
+                    <div className={`h-7 w-32 rounded animate-pulse ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"}`} />
                   )}
                 </div>
               </div>
               {saleDate ? (
-                <Badge variant="secondary" className="bg-red-50 text-red-700">
+                <Badge variant="secondary" className={theme === "dark" ? "bg-red-900/40 text-red-400" : "bg-red-50 text-red-700"}>
                   {new Date(saleDate + 'T00:00:00').toLocaleDateString('id-ID', { 
                     weekday: 'long', 
                     day: 'numeric', 
@@ -459,18 +492,17 @@ export default function InputPage() {
                   })}
                 </Badge>
               ) : (
-                <div className="h-6 w-28 bg-gray-100 rounded animate-pulse" />
+                <div className={`h-6 w-28 rounded animate-pulse ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"}`} />
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Alert Message */}
         {message && (
           <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
             message.type === 'success' 
-              ? 'bg-green-50 border border-green-200 text-green-700' 
-              : 'bg-red-50 border border-red-200 text-red-700'
+              ? theme === "dark" ? 'bg-green-900/40 border border-green-700 text-green-300' : 'bg-green-50 border border-green-200 text-green-700'
+              : theme === "dark" ? 'bg-red-900/40 border border-red-700 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'
           }`}>
             {message.type === 'success' ? 
               <CheckCircle className="w-5 h-5" /> : 
@@ -480,13 +512,12 @@ export default function InputPage() {
           </div>
         )}
 
-        {/* Products List */}
         <Card>
-          <CardHeader className="border-b bg-gray-50">
+          <CardHeader className={`border-b ${theme === "dark" ? "bg-gray-800" : "bg-gray-50"}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Package className="w-5 h-5 text-gray-500" />
-                <h3 className="font-bold text-gray-900">Daftar Produk</h3>
+                <Package className={`w-5 h-5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Daftar Produk</h3>
               </div>
               <Badge variant="outline">
                 {products.length} produk
@@ -496,16 +527,16 @@ export default function InputPage() {
           <CardContent className="p-0">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <div className="w-8 h-8 border-2 border-gray-200 border-t-[#DC2626] rounded-full animate-spin"></div>
-                <p className="text-gray-500 text-sm font-medium">
+                <div className={`w-8 h-8 border-2 border-t-[#DC2626] rounded-full animate-spin ${theme === "dark" ? "border-gray-700" : "border-gray-200"}`}></div>
+                <p className={`text-sm font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                   Memuat daftar produk...
                 </p>
               </div>
             ) : products.length === 0 ? (
               <div className="text-center py-12">
-                <Package className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500 font-medium">Belum ada produk</p>
-                <p className="text-gray-400 text-sm">Tambahkan produk terlebih dahulu</p>
+                <Package className={`w-12 h-12 mx-auto mb-3 ${theme === "dark" ? "text-gray-600" : "text-gray-300"}`} />
+                <p className={`font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Belum ada produk</p>
+                <p className={`text-sm ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>Tambahkan produk terlebih dahulu</p>
                 <Button 
                   className="mt-4 bg-red-600 hover:bg-red-700"
                   onClick={() => router.push('/products')}
@@ -514,33 +545,36 @@ export default function InputPage() {
                 </Button>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className={`divide-y ${theme === "dark" ? "divide-gray-700" : "divide-gray-100"}`}>
                 {products.map((product) => (
                   <div 
                     key={product.id} 
-                    className={`p-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                      entries[product.id] > 0 ? 'bg-green-50/50' : ''
+                    className={`p-4 flex items-center justify-between transition-colors ${
+                      entries[product.id] > 0 
+                        ? theme === "dark" ? 'bg-green-900/30' : 'bg-green-50/50'
+                        : theme === "dark" ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 truncate">
+                      <h4 className={`font-semibold truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                         {product.name}
                       </h4>
-                      <p className="text-sm text-gray-500">
+                      <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                         {product.unit || 'pcs'}
                         {product.price ? ` • Rp ${product.price.toLocaleString('id-ID')}` : ''}
                       </p>
                     </div>
 
-                    {/* Quantity Controls */}
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => decrementQuantity(product.id)}
-                        className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                          theme === "dark" ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"
+                        }`}
                         disabled={entries[product.id] <= 0}
                       >
-                        <Minus className="w-4 h-4 text-gray-600" />
+                        <Minus className={`w-4 h-4 ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`} />
                       </button>
                       
                       <input
@@ -550,10 +584,13 @@ export default function InputPage() {
                         onChange={(e) => handleQuantityChange(product.id, parseInt(e.target.value) || 0)}
                         className={`w-20 h-12 text-center text-xl font-bold rounded-lg border-2 transition-colors
                           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
-                          placeholder:text-gray-300 placeholder:font-normal
-                          ${entries[product.id] > 0 
-                            ? 'border-green-300 bg-green-50 text-green-700' 
-                            : 'border-gray-200 bg-white text-gray-900'
+                          ${theme === "dark" 
+                            ? entries[product.id] > 0 
+                              ? 'border-green-600 bg-green-900/50 text-white placeholder:text-gray-600' 
+                              : 'border-gray-600 bg-gray-800 text-white placeholder:text-gray-600'
+                            : entries[product.id] > 0 
+                              ? 'border-green-300 bg-green-50 text-green-700 placeholder:text-gray-300' 
+                              : 'border-gray-200 bg-white text-gray-900 placeholder:text-gray-300'
                           }`}
                         min="0"
                       />
@@ -561,9 +598,11 @@ export default function InputPage() {
                       <button
                         type="button"
                         onClick={() => incrementQuantity(product.id)}
-                        className="w-10 h-10 rounded-full bg-red-100 hover:bg-red-200 flex items-center justify-center transition-colors"
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                          theme === "dark" ? "bg-red-900/50 hover:bg-red-900/70" : "bg-red-100 hover:bg-red-200"
+                        }`}
                       >
-                        <Plus className="w-4 h-4 text-red-600" />
+                        <Plus className={`w-4 h-4 ${theme === "dark" ? "text-red-400" : "text-red-600"}`} />
                       </button>
                     </div>
                   </div>
@@ -573,22 +612,21 @@ export default function InputPage() {
           </CardContent>
         </Card>
 
-        {/* Summary & Submit */}
         {products.length > 0 && (
           <Card className="mt-6 border-t-4 border-t-green-500">
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-xs text-gray-500">Ringkasan Input</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Ringkasan Input</p>
                   <div className="flex items-center gap-4">
                     <div>
-                      <span className="text-2xl font-bold text-gray-900">{totalProducts}</span>
-                      <span className="text-gray-500 text-sm ml-1">produk</span>
+                      <span className={`text-2xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{totalProducts}</span>
+                      <span className={`text-sm ml-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>produk</span>
                     </div>
-                    <div className="w-px h-6 bg-gray-200"></div>
+                    <div className={`w-px h-6 ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}></div>
                     <div>
-                      <span className="text-2xl font-bold text-green-600">{totalQuantity}</span>
-                      <span className="text-gray-500 text-sm ml-1">total item</span>
+                      <span className={`text-2xl font-bold ${theme === "dark" ? "text-green-400" : "text-green-600"}`}>{totalQuantity}</span>
+                      <span className={`text-sm ml-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>total item</span>
                     </div>
                   </div>
                 </div>
@@ -600,7 +638,7 @@ export default function InputPage() {
                   className={`px-6 py-2.5 text-sm font-bold shadow-lg transition-all ${
                     totalProducts > 0 
                       ? 'bg-green-600 hover:bg-green-700 text-white' 
-                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : theme === "dark" ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                   }`}
                 >
                   <Save className="w-4 h-4 mr-2" />
@@ -611,41 +649,48 @@ export default function InputPage() {
           </Card>
         )}
 
-        {/* Sales History Table */}
         {salesHistory.length > 0 && (
           <Card className="mt-8">
-            <CardHeader className="border-b bg-gray-50">
+            <CardHeader className={`border-b ${theme === "dark" ? "bg-gray-800" : "bg-gray-50"}`}>
               <div className="flex items-center gap-2">
-                <History className="w-5 h-5 text-gray-500" />
-                <h3 className="font-bold text-gray-900">Riwayat Penjualan Terbaru</h3>
+                <History className={`w-5 h-5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Riwayat Penjualan Terbaru</h3>
                 <Badge variant="outline" className="ml-auto">{salesHistory.length} data</Badge>
               </div>
             </CardHeader>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50 border-b">
+                  <thead className={`border-b ${theme === "dark" ? "bg-gray-800" : "bg-gray-50"}`}>
                     <tr>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">Tanggal</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-600 text-sm">Produk</th>
-                      <th className="text-right py-3 px-4 font-semibold text-gray-600 text-sm">Qty Terjual</th>
+                      <th className={`text-left py-3 px-4 font-semibold text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Tanggal</th>
+                      <th className={`text-left py-3 px-4 font-semibold text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Produk</th>
+                      <th className={`text-right py-3 px-4 font-semibold text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Qty</th>
+                      <th className={`text-right py-3 px-4 font-semibold text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Harga Satuan</th>
+                      <th className={`text-right py-3 px-4 font-semibold text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className={`divide-y ${theme === "dark" ? "divide-gray-700" : "divide-gray-100"}`}>
                     {salesHistory.map((sale, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50 transition-colors">
-                        <td className="py-3 px-4 text-sm text-gray-600">
+                      <tr key={idx} className={`transition-colors ${theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-50"}`}>
+                        <td className={`py-3 px-4 text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                           {new Date(sale.date).toLocaleDateString('id-ID', {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric'
                           })}
                         </td>
-                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{sale.product_name}</td>
+                        <td className={`py-3 px-4 text-sm font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{sale.product_name}</td>
                         <td className="py-3 px-4 text-sm text-right">
-                          <Badge variant="secondary" className="bg-blue-50 text-blue-700">
-                            {sale.quantity} unit
+                          <Badge variant="secondary" className={theme === "dark" ? "bg-blue-900/40 text-blue-400" : "bg-blue-50 text-blue-700"}>
+                            {sale.quantity}
                           </Badge>
+                        </td>
+                        <td className={`py-3 px-4 text-sm text-right ${theme === "dark" ? "text-gray-300" : "text-gray-700"}`}>
+                          {sale.unit_price ? `Rp ${sale.unit_price.toLocaleString('id-ID')}` : '-'}
+                        </td>
+                        <td className={`py-3 px-4 text-sm text-right font-medium ${theme === "dark" ? "text-green-400" : "text-green-600"}`}>
+                          {sale.revenue ? `Rp ${sale.revenue.toLocaleString('id-ID')}` : '-'}
                         </td>
                       </tr>
                     ))}

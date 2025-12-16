@@ -202,6 +202,11 @@ def train_all_models():
             mae = brain.mae if brain.mae else 0
             val_mae = brain.val_mae if hasattr(brain, 'val_mae') and brain.val_mae else mae
             baseline_mae = brain.baseline_mae if brain.baseline_mae else 0
+            val_r2 = brain.val_r2 if hasattr(brain, 'val_r2') and brain.val_r2 is not None else 0
+            val_rmse = brain.val_rmse if hasattr(brain, 'val_rmse') and brain.val_rmse is not None else 0
+            val_mape = brain.val_mape if hasattr(brain, 'val_mape') and brain.val_mape is not None else 0
+            val_accuracy = brain.val_accuracy if hasattr(brain, 'val_accuracy') and brain.val_accuracy is not None else 0
+            overfit_ratio = brain.overfit_ratio if hasattr(brain, 'overfit_ratio') and brain.overfit_ratio is not None else 0
             
             # Calculate improvement
             improvement = 0
@@ -228,7 +233,11 @@ def train_all_models():
                 else:
                     quality = "△"   # Needs improvement
                 
-                print(f"  {status} Val MAE: {val_mae:.4f} | Baseline: {baseline_mae:.4f} | Imp: {improvement:.1f}% {quality}")
+                print(
+                    f"  {status} Val MAE: {val_mae:.4f} | R2: {val_r2:.3f} | "
+                    f"Acc: {val_accuracy:.1f}% | Overfit: {overfit_ratio:.2f} | "
+                    f"Rows: {len(df):,} | Baseline: {baseline_mae:.4f} | Imp: {improvement:.1f}% {quality}"
+                )
                 
                 results['successful'].append({
                     'product': product_name,
@@ -237,6 +246,11 @@ def train_all_models():
                     'baseline_mae': baseline_mae,
                     'improvement': improvement,
                     'normalized_mae': normalized_mae,
+                    'val_r2': val_r2,
+                    'val_rmse': val_rmse,
+                    'val_mape': val_mape,
+                    'val_accuracy': val_accuracy,
+                    'overfit_ratio': overfit_ratio,
                     'rows': len(df)
                 })
             else:
@@ -271,15 +285,33 @@ def train_all_models():
         val_maes = [m['val_mae'] for m in results['successful']]
         improvements = [m['improvement'] for m in results['successful']]
         normalized_maes = [m['normalized_mae'] for m in results['successful']]
+        r2_scores = [m.get('val_r2', 0) for m in results['successful']]
+        accuracies = [m.get('val_accuracy', 0) for m in results['successful']]
+        rmses = [m.get('val_rmse', 0) for m in results['successful']]
+        mapes = [m.get('val_mape', 0) for m in results['successful']]
+        overfits = [m.get('overfit_ratio', 0) for m in results['successful']]
+        rows_list = [m.get('rows', 0) for m in results['successful']]
         
         avg_val_mae = np.mean(val_maes)
         avg_improvement = np.mean(improvements)
         avg_normalized_mae = np.mean(normalized_maes)
+        avg_r2 = np.mean(r2_scores) if r2_scores else 0
+        avg_accuracy = np.mean(accuracies) if accuracies else 0
+        avg_rmse = np.mean(rmses) if rmses else 0
+        avg_mape = np.mean(mapes) if mapes else 0
+        avg_overfit = np.mean(overfits) if overfits else 0
+        total_rows = int(np.sum(rows_list)) if rows_list else 0
         
         print(f"📊 Aggregate Metrics:")
         print(f"   Average Validation MAE:    {avg_val_mae:.4f}")
         print(f"   Average Normalized MAE:    {avg_normalized_mae:.4f}")
         print(f"   Average Improvement:       {avg_improvement:.1f}%")
+        print(f"   Average R2 Score:          {avg_r2:.3f}")
+        print(f"   Average Accuracy (1-MAPE): {avg_accuracy:.1f}%")
+        print(f"   Average RMSE:              {avg_rmse:.4f}")
+        print(f"   Average MAPE:              {avg_mape:.4f}")
+        print(f"   Average Overfit Ratio:     {avg_overfit:.2f}")
+        print(f"   Total Rows Processed:      {total_rows:,}")
         print()
         
         # Quality assessment

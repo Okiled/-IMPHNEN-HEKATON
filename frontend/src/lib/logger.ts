@@ -1,4 +1,4 @@
-// Production-safe logger - hanya log di development
+// logger aman untuk production
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -10,11 +10,9 @@ export const logger = {
     if (isDev) console.warn(...args);
   },
   error: (...args: unknown[]) => {
-    // Always log errors, but sanitize in production
     if (isDev) {
       console.error(...args);
     } else {
-      // In production, log minimal info without sensitive data
       const sanitized = args.map(arg => {
         if (arg instanceof Error) return arg.message;
         if (typeof arg === 'string') return arg.slice(0, 200);

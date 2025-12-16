@@ -12,6 +12,8 @@ import { ArrowUpRight, ArrowDownRight, AlertTriangle, TrendingUp, RefreshCcw } f
 import { API_URL } from "@/lib/api";
 import { getToken, requireAuth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { useTheme } from "@/lib/theme-context";
+import { useNotification } from "@/components/ui/NotificationToast";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -54,11 +56,14 @@ type Product = { id: string; name: string; unit?: string };
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const { addNotification } = useNotification();
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [notifiedBursts, setNotifiedBursts] = useState<Set<string>>(new Set());
 
   // Check auth on mount
   useEffect(() => {
@@ -106,13 +111,30 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     
-    // Parallel fetch for faster loading
     Promise.all([fetchProducts(), fetchSummary()]);
     
-    // Refresh setiap 5 menit
     const interval = setInterval(fetchSummary, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [isAuthenticated]);
+
+  // cek burst alerts dan tampilkan notifikasi
+  useEffect(() => {
+    if (!summary?.burst_alerts?.length) return;
+    
+    summary.burst_alerts.forEach(alert => {
+      if (!notifiedBursts.has(alert.product_id)) {
+        addNotification({
+          type: "burst",
+          title: "Burst Alert!",
+          message: `"${alert.product_name}" mengalami lonjakan penjualan`,
+          productName: alert.product_name,
+          burstLevel: alert.burst_level,
+        });
+        
+        setNotifiedBursts(prev => new Set([...prev, alert.product_id]));
+      }
+    });
+  }, [summary, notifiedBursts, addNotification]);
 
   // Helper untuk format Rupiah
   const formatRupiah = (num: number) => {
@@ -122,14 +144,16 @@ export default function DashboardPage() {
   // Don't render if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-900 selection:bg-red-600 selection:text-white">
+    <div className={`min-h-screen selection:bg-red-600 selection:text-white transition-colors duration-300 ${
+      theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-slate-900"
+    }`}>
       <Navbar />
       <motion.main 
         initial={{ opacity: 0, y: 10 }}
@@ -144,13 +168,15 @@ export default function DashboardPage() {
             className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
           >
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900">Dashboard Overview</h1>
-              <p className="text-sm text-gray-500 mt-1">
+              <h1 className={`text-3xl font-bold tracking-tight ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Dashboard Overview</h1>
+              <p className={`text-sm mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                 Pantau performa harian & deteksi anomali penjualan.
               </p>
             </div>
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-              <Button onClick={fetchSummary} variant="outline" size="sm" className="bg-white shadow-sm flex items-center gap-2">
+              <Button onClick={fetchSummary} variant="outline" size="sm" className={`shadow-sm flex items-center gap-2 ${
+                theme === "dark" ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : "bg-white"
+              }`}>
                 <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
@@ -166,14 +192,18 @@ export default function DashboardPage() {
               className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
             >
               <motion.div variants={itemVariants}>
-                <Card className="hover:shadow-md transition-shadow">
+                <Card className={`transition-shadow ${
+                  theme === "dark" 
+                    ? "bg-gray-800 border-gray-700 hover:shadow-[0_8px_30px_rgba(255,255,255,0.1)]" 
+                    : "hover:shadow-md"
+                }`}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Pendapatan</CardTitle>
-                    <span className="text-gray-500 font-bold text-xs">IDR</span>
+                    <CardTitle className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : ""}`}>Total Pendapatan</CardTitle>
+                    <span className={`font-bold text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>IDR</span>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{formatRupiah(summary.today.total_revenue)}</div>
-                    <p className={`text-xs flex items-center mt-1 font-medium ${summary.changes.revenue_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>{formatRupiah(summary.today.total_revenue)}</div>
+                    <p className={`text-xs flex items-center mt-1 font-medium ${summary.changes.revenue_change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                       {summary.changes.revenue_change >= 0 ? <ArrowUpRight className="h-4 w-4 mr-1" /> : <ArrowDownRight className="h-4 w-4 mr-1" />}
                       {Math.abs(summary.changes.revenue_change).toFixed(1)}% dari kemarin
                     </p>
@@ -182,14 +212,18 @@ export default function DashboardPage() {
               </motion.div>
 
               <motion.div variants={itemVariants}>
-                <Card className="hover:shadow-md transition-shadow">
+                <Card className={`transition-shadow ${
+                  theme === "dark" 
+                    ? "bg-gray-800 border-gray-700 hover:shadow-[0_8px_30px_rgba(255,255,255,0.1)]" 
+                    : "hover:shadow-md"
+                }`}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Total Item Terjual</CardTitle>
-                    <span className="text-gray-500 font-bold text-xs">QTY</span>
+                    <CardTitle className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : ""}`}>Total Item Terjual</CardTitle>
+                    <span className={`font-bold text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>QTY</span>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{summary.today.total_quantity} pcs</div>
-                    <p className={`text-xs flex items-center mt-1 font-medium ${summary.changes.quantity_change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <div className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>{summary.today.total_quantity} pcs</div>
+                    <p className={`text-xs flex items-center mt-1 font-medium ${summary.changes.quantity_change >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                       {summary.changes.quantity_change >= 0 ? <ArrowUpRight className="h-4 w-4 mr-1" /> : <ArrowDownRight className="h-4 w-4 mr-1" />}
                       {Math.abs(summary.changes.quantity_change).toFixed(1)}% dari kemarin
                     </p>
@@ -198,14 +232,18 @@ export default function DashboardPage() {
               </motion.div>
 
               <motion.div variants={itemVariants}>
-                <Card className="hover:shadow-md transition-shadow">
+                <Card className={`transition-shadow ${
+                  theme === "dark" 
+                    ? "bg-gray-800 border-gray-700 hover:shadow-[0_8px_30px_rgba(255,255,255,0.1)]" 
+                    : "hover:shadow-md"
+                }`}>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Transaksi</CardTitle>
-                    <span className="text-gray-500 font-bold text-xs">TRX</span>
+                    <CardTitle className={`text-sm font-medium ${theme === "dark" ? "text-gray-300" : ""}`}>Transaksi</CardTitle>
+                    <span className={`font-bold text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>TRX</span>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">{summary.today.sales_count}</div>
-                    <p className="text-xs text-gray-500 mt-1">Transaksi berhasil hari ini</p>
+                    <div className={`text-2xl font-bold ${theme === "dark" ? "text-white" : ""}`}>{summary.today.sales_count}</div>
+                    <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Transaksi berhasil hari ini</p>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -249,11 +287,16 @@ export default function DashboardPage() {
           >
             {/* Sidebar List Produk */}
             <Card className="lg:col-span-2 lg:sticky lg:top-6 shadow-sm">
-              <CardHeader className="pb-3 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-900">Daftar Produk</h3>
+              <CardHeader className={`pb-3 border-b ${theme === "dark" ? "border-gray-700" : "border-gray-100"}`}>
+                <h3 className={`text-base font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Daftar Produk</h3>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[600px] overflow-y-auto p-2 space-y-1">
+                <div className={`max-h-[600px] overflow-y-auto p-2 space-y-1 ${
+                  theme === "dark" ? "scrollbar-dark" : ""
+                }`} style={theme === "dark" ? {
+                  scrollbarColor: '#4b5563 #1f2937',
+                  scrollbarWidth: 'thin'
+                } : {}}>
                   {products.map((p, idx) => (
                     <motion.button
                       key={p.id}
@@ -263,8 +306,12 @@ export default function DashboardPage() {
                       onClick={() => setSelectedId(p.id)}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-all duration-150 truncate ${
                         selectedId === p.id
-                          ? "bg-red-50 text-red-700 font-medium border border-red-200 shadow-sm"
-                          : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
+                          ? theme === "dark" 
+                            ? "bg-red-900/40 text-red-400 font-medium border border-red-800 shadow-sm"
+                            : "bg-red-50 text-red-700 font-medium border border-red-200 shadow-sm"
+                          : theme === "dark"
+                            ? "text-gray-300 hover:bg-gray-700 hover:text-white"
+                            : "hover:bg-gray-100 text-gray-600 hover:text-gray-900"
                       }`}
                     >
                       {p.name}
@@ -291,14 +338,18 @@ export default function DashboardPage() {
                   <motion.div 
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="flex h-[400px] items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50/50 text-center"
+                    className={`flex h-[400px] items-center justify-center rounded-xl border-2 border-dashed text-center ${
+                      theme === "dark" 
+                        ? "border-gray-700 bg-gray-800/50" 
+                        : "border-gray-200 bg-gray-50/50"
+                    }`}
                   >
                     <div className="flex flex-col items-center">
-                      <div className="p-4 bg-white rounded-full shadow-sm mb-4">
-                        <TrendingUp className="h-8 w-8 text-gray-400" />
+                      <div className={`p-4 rounded-full shadow-sm mb-4 ${theme === "dark" ? "bg-gray-700" : "bg-white"}`}>
+                        <TrendingUp className={`h-8 w-8 ${theme === "dark" ? "text-gray-400" : "text-gray-400"}`} />
                       </div>
-                      <h3 className="text-lg font-semibold text-gray-900">Pilih Produk</h3>
-                      <p className="text-sm text-gray-500 mt-1">Klik produk dari sidebar untuk melihat analisa.</p>
+                      <h3 className={`text-lg font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Pilih Produk</h3>
+                      <p className={`text-sm mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Klik produk dari sidebar untuk melihat analisa.</p>
                     </div>
                   </motion.div>
                 )}

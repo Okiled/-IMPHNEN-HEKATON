@@ -11,18 +11,11 @@ import intelligenceRoutes from './routes/intelligenceRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import { optionalAuth } from '../lib/auth/middleware';
 import { requestLogger, errorLogger } from './middleware/logger';
-import { warmupConnection, checkConnection } from '../lib/database/schema';
 
 dotenv.config()
 
-// Warmup database connection on cold start
-warmupConnection().catch(console.error)
-
 const app = express()
 const PORT = process.env.PORT || 5000
-
-// Trust proxy (required for Vercel/reverse proxy)
-app.set('trust proxy', 1)
 
 // Security headers
 app.use(helmet({
@@ -73,8 +66,11 @@ const allowedOrigins = process.env.FRONTEND_URL
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (health checks, Postman, curl, etc)
+    // Allow requests with no origin (mobile apps, Postman, curl, etc) in development only
     if (!origin) {
+      if (process.env.NODE_ENV === 'production') {
+        return callback(new Error('Origin required in production'), false);
+      }
       return callback(null, true);
     }
 
@@ -100,15 +96,6 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Add cache headers for API responses
-app.use('/api', (req, res, next) => {
-  // Cache GET requests for 30 seconds (stale-while-revalidate for 60s)
-  if (req.method === 'GET') {
-    res.set('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
-  }
-  next();
-});
-
 // Request logging
 app.use(requestLogger);
 
@@ -125,13 +112,11 @@ app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reports', reportRoutes);
 
-app.get('/health', async (req, res) => {
-  const dbStatus = await checkConnection()
+app.get('/health', (req, res) => {
   res.json({ 
-    status: dbStatus.ok ? 'OK' : 'DEGRADED', 
+    status: 'OK', 
     message: 'Backend is running!',
     timestamp: new Date().toISOString(),
-    database: dbStatus,
     routes: ['/api/products', '/api/products/ranking', '/api/products/:id']
   })
 })

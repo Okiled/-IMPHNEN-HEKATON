@@ -3,6 +3,21 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --surface: #f9fafb;
+  --surface-elevated: #ffffff;
+  --border: #e5e7eb;
+  --muted: #6b7280;
+  --card-bg: #ffffff;
+}
+
+.dark {
+  --background: #0f0f0f;
+  --foreground: #f3f4f6;
+  --surface: #1a1a1a;
+  --surface-elevated: #262626;
+  --border: #374151;
+  --muted: #9ca3af;
+  --card-bg: #1f1f1f;
 }
 
 @theme {
@@ -13,25 +28,19 @@
   --color-secondary: #000000;
   --color-secondary-foreground: #FFFFFF;
 
-  --color-background: #FFFFFF;
-  --color-surface: #FAFAFA;
-  --color-border: #E5E7EB;
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
 
   --color-danger: #EF4444;
   --color-danger-hover: #DC2626;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Disable text selection globally except for inputs */
@@ -57,4 +66,59 @@ input[type="url"] {
   -moz-user-select: text;
   -ms-user-select: text;
   user-select: text;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Dark mode scrollbar */
+.dark ::-webkit-scrollbar-track,
+[data-theme="dark"] ::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Dark mode date picker - use native dark theme */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+}
+
+/* Make calendar icon white in dark mode while keeping popup dark */
+input[type="date"].dark-calendar-icon::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: inherit;
 }

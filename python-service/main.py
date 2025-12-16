@@ -592,8 +592,9 @@ def _generate_fallback_predictions(df, days: int) -> List[Dict]:
     predictions = []
     last_date = df['date'].max()
 
-    # Default DOW factors
-    default_dow = {0: 0.92, 1: 0.96, 2: 1.00, 3: 1.02, 4: 1.10, 5: 1.15, 6: 0.88}
+    # Default DOW factors (Weekend highest, Tuesday lowest - based on retail patterns)
+    # 0=Monday, 1=Tuesday, ..., 5=Saturday, 6=Sunday
+    default_dow = {0: 0.97, 1: 0.93, 2: 0.94, 3: 0.96, 4: 1.01, 5: 1.08, 6: 1.11}
     
     # Learn DOW patterns from data if enough data
     learned_dow = {}
@@ -606,17 +607,29 @@ def _generate_fallback_predictions(df, days: int) -> List[Dict]:
                 learned_dow[dow] = max(dow_clamp[0], min(dow_clamp[1], raw_factor))
 
     prev_pred = None
+    weekend_dows = {5, 6}  # Saturday=5, Sunday=6
+    
     for i in range(1, days + 1):
         pred_date = last_date + timedelta(days=i)
         day_of_week = pred_date.weekday()
         day_of_month = pred_date.day
 
-        # DOW factor (scaled by data quality)
+        # DOW factor - blend learned with default, protect weekend from being too low
+        default_mult = default_dow.get(day_of_week, 1.0)
+        
         if learned_dow and day_of_week in learned_dow:
-            raw_dow = learned_dow[day_of_week]
+            learned_factor = learned_dow[day_of_week]
+            is_weekend = day_of_week in weekend_dows
+            
+            # If weekend and learned is lower than default, blend toward default
+            if is_weekend and learned_factor < default_mult:
+                blend_toward_default = 0.7 - (variation_scale * 0.4)  # 0.3-0.7
+                dow_factor = learned_factor * (1 - blend_toward_default) + default_mult * blend_toward_default
+            else:
+                # Normal blending
+                dow_factor = learned_factor * variation_scale + default_mult * (1 - variation_scale)
         else:
-            raw_dow = default_dow.get(day_of_week, 1.0)
-        dow_factor = 1.0 + (raw_dow - 1.0) * variation_scale
+            dow_factor = default_mult
 
         # Payday factor (scaled)
         if day_of_month >= 25 or day_of_month <= 5:

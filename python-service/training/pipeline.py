@@ -113,6 +113,12 @@ def calculate_aggregate_metrics(results):
         if r.metrics and 'validation' in r.metrics:
             val_mae = r.metrics['validation'].get('mae', 0)
             train_mae = r.metrics.get('train', {}).get('mae', val_mae)
+            val_r2 = r.metrics['validation'].get('r2', 0)
+            val_rmse = r.metrics['validation'].get('rmse', 0)
+            val_mape = r.metrics['validation'].get('mape', 0)
+            val_accuracy = r.metrics['validation'].get('accuracy_pct', 0)
+            overfit_ratio = r.metrics.get('overfit_ratio', 0)
+            rows = r.metrics.get('rows', 0)
             
             # Calculate improvement (if baseline available)
             baseline_mae = r.metrics.get('baseline_mae')
@@ -125,6 +131,12 @@ def calculate_aggregate_metrics(results):
                 'product_id': r.product_id,
                 'train_mae': train_mae,
                 'val_mae': val_mae,
+                'val_r2': val_r2,
+                'val_rmse': val_rmse,
+                'val_mape': val_mape,
+                'val_accuracy': val_accuracy,
+                'overfit_ratio': overfit_ratio,
+                'rows': rows,
                 'improvement': improvement,
                 'time': r.training_time
             })
@@ -136,6 +148,12 @@ def calculate_aggregate_metrics(results):
     avg_val_mae = sum(m['val_mae'] for m in metrics_list) / len(metrics_list)
     avg_improvement = sum(m['improvement'] for m in metrics_list) / len(metrics_list)
     total_time = sum(m['time'] for m in metrics_list)
+    avg_r2 = sum(m.get('val_r2', 0) for m in metrics_list) / len(metrics_list)
+    avg_accuracy = sum(m.get('val_accuracy', 0) for m in metrics_list) / len(metrics_list)
+    avg_rmse = sum(m.get('val_rmse', 0) for m in metrics_list) / len(metrics_list)
+    avg_mape = sum(m.get('val_mape', 0) for m in metrics_list) / len(metrics_list)
+    avg_overfit = sum(m.get('overfit_ratio', 0) for m in metrics_list) / len(metrics_list)
+    total_rows = sum(m.get('rows', 0) for m in metrics_list)
     
     # Find best and worst
     sorted_by_mae = sorted(metrics_list, key=lambda x: x['val_mae'])
@@ -145,6 +163,12 @@ def calculate_aggregate_metrics(results):
         'count': len(metrics_list),
         'avg_val_mae': avg_val_mae,
         'avg_improvement': avg_improvement,
+        'avg_r2': avg_r2,
+        'avg_accuracy': avg_accuracy,
+        'avg_rmse': avg_rmse,
+        'avg_mape': avg_mape,
+        'avg_overfit': avg_overfit,
+        'total_rows': total_rows,
         'total_time': total_time,
         'best_models': best_models,
         'all_metrics': metrics_list
@@ -242,12 +266,24 @@ def main():
             print(f"\n📈 Model Performance Metrics:")
             print(f"   Average Validation MAE:     {agg_metrics['avg_val_mae']:.4f}")
             print(f"   Average Improvement:        {agg_metrics['avg_improvement']:.1f}%")
+            print(f"   Average R2 Score:           {agg_metrics['avg_r2']:.3f}")
+            print(f"   Average Accuracy (1-MAPE):  {agg_metrics['avg_accuracy']:.1f}%")
+            print(f"   Average RMSE:               {agg_metrics['avg_rmse']:.4f}")
+            print(f"   Average MAPE:               {agg_metrics['avg_mape']:.4f}")
+            print(f"   Average Overfit Ratio:      {agg_metrics['avg_overfit']:.2f}")
+            print(f"   Total Rows Processed:       {agg_metrics['total_rows']:,}")
             print(f"   Total Training Time:        {agg_metrics['total_time']:.1f}s")
             
             print(f"\n🏆 Top 5 Best Models (by MAE):")
             for i, m in enumerate(agg_metrics['best_models'], 1):
                 name = m['product_id'][:35]
-                print(f"   {i}. {name:35} MAE: {m['val_mae']:.4f}")
+                print(
+                    f"   {i}. {name:35} MAE: {m['val_mae']:.4f} | "
+                    f"R2: {m.get('val_r2', 0):.3f} | "
+                    f"Acc: {m.get('val_accuracy', 0):.1f}% | "
+                    f"Overfit: {m.get('overfit_ratio', 0):.2f} | "
+                    f"Rows: {m.get('rows', 0):,}"
+                )
             
             # Quality assessment
             if agg_metrics['avg_val_mae'] <= 0.5:

@@ -9,7 +9,8 @@ export interface ParsedSalesRow {
   productName: string;
   quantity: number;
   date?: string;
-  price?: number;
+  price?: number;        // Unit price (harga satuan)
+  totalPrice?: number;   // Total price (harga total = price * qty)
 }
 
 // Column name patterns - supports various Indonesian and English variations
@@ -33,6 +34,11 @@ const COLUMN_PATTERNS = {
     'harga', 'price', 'hrg', 'nilai', 'value', 'cost', 'biaya',
     'harga_satuan', 'harga satuan', 'unit_price', 'unit price',
     'harga_jual', 'harga jual', 'selling_price', 'sell_price'
+  ],
+  totalPrice: [
+    'total', 'total_harga', 'total harga', 'total_price', 'total price',
+    'subtotal', 'sub_total', 'sub total', 'jumlah_harga', 'jumlah harga',
+    'amount', 'grand_total', 'grand total', 'nilai_total', 'nilai total'
   ]
 };
 
@@ -52,12 +58,13 @@ function findColumnIndex(headers: string[], patterns: string[]): number {
 }
 
 // Detect column mapping from headers
-function detectColumns(headers: string[]): { product: number; quantity: number; date: number; price: number } {
+function detectColumns(headers: string[]): { product: number; quantity: number; date: number; price: number; totalPrice: number } {
   return {
     product: findColumnIndex(headers, COLUMN_PATTERNS.product),
     quantity: findColumnIndex(headers, COLUMN_PATTERNS.quantity),
     date: findColumnIndex(headers, COLUMN_PATTERNS.date),
-    price: findColumnIndex(headers, COLUMN_PATTERNS.price)
+    price: findColumnIndex(headers, COLUMN_PATTERNS.price),
+    totalPrice: findColumnIndex(headers, COLUMN_PATTERNS.totalPrice)
   };
 }
 
@@ -192,10 +199,18 @@ export function parseCSV(content: string): ParsedSalesRow[] {
     const productName = cols[colMap.product] || '';
     const quantity = parseNumber(cols[colMap.quantity]);
     const date = colMap.date >= 0 ? parseFlexibleDate(cols[colMap.date]) : undefined;
-    const price = colMap.price >= 0 ? parseNumber(cols[colMap.price]) : undefined;
+    
+    // Parse price - prioritize unit price, calculate from total if not available
+    let price = colMap.price >= 0 ? parseNumber(cols[colMap.price]) : undefined;
+    const totalPrice = colMap.totalPrice >= 0 ? parseNumber(cols[colMap.totalPrice]) : undefined;
+    
+    // If no unit price but has total price and quantity, calculate unit price
+    if ((!price || price === 0) && totalPrice && totalPrice > 0 && quantity > 0) {
+      price = Math.round(totalPrice / quantity);
+    }
 
     if (productName && quantity >= 0) {
-      result.push({ productName, quantity, date, price });
+      result.push({ productName, quantity, date, price, totalPrice });
     }
   }
 
@@ -253,10 +268,18 @@ export function parseExcel(buffer: Buffer): ParsedSalesRow[] {
       const productName = String(row[colMap.product] || '').trim();
       const quantity = parseNumber(row[colMap.quantity]);
       const date = colMap.date >= 0 ? parseFlexibleDate(row[colMap.date] as string | number) : undefined;
-      const price = colMap.price >= 0 ? parseNumber(row[colMap.price]) : undefined;
+      
+      // Parse price - prioritize unit price, calculate from total if not available
+      let price = colMap.price >= 0 ? parseNumber(row[colMap.price]) : undefined;
+      const totalPrice = colMap.totalPrice >= 0 ? parseNumber(row[colMap.totalPrice]) : undefined;
+      
+      // If no unit price but has total price and quantity, calculate unit price
+      if ((!price || price === 0) && totalPrice && totalPrice > 0 && quantity > 0) {
+        price = Math.round(totalPrice / quantity);
+      }
 
       if (productName && quantity >= 0) {
-        result.push({ productName, quantity, date, price });
+        result.push({ productName, quantity, date, price, totalPrice });
       }
     }
   } catch (error) {

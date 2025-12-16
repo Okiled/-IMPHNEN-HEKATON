@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, ShoppingBag, User, LogOut } from "lucide-react";
+import { Menu, X, ShoppingBag, User, LogOut, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/lib/theme-context";
 
 const navLinks = [
   { name: "Beranda", href: "/" },
@@ -24,6 +25,7 @@ export default function Navbar() {
 
   const pathname = usePathname();
   const router = useRouter();
+  const { theme, toggleTheme } = useTheme();
 
   const shouldAnimate = !hasAnimated && pathname === "/";
 
@@ -57,8 +59,12 @@ useEffect(() => {
         transition={{ duration: 0.5, ease: "easeOut" }}
         className={`fixed w-full z-50 transition-all duration-300 ${
           scrolled
-            ? "bg-white/90 backdrop-blur-md shadow-md py-3"
-            : "bg-white py-5"
+            ? theme === "dark" 
+              ? "bg-gray-900/95 backdrop-blur-md shadow-md py-3 border-b border-gray-800"
+              : "bg-white/90 backdrop-blur-md shadow-md py-3"
+            : theme === "dark"
+              ? "bg-gray-900 py-5"
+              : "bg-white py-5"
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -69,7 +75,7 @@ useEffect(() => {
               <div className="w-9 h-9 bg-[#DC2626] rounded-xl flex items-center justify-center text-white transform group-hover:rotate-12 transition-transform duration-300">
                 <ShoppingBag size={18} />
               </div>
-                <span className="text-xl font-bold text-black">
+                <span className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-black"}`}>
                   MEGAW <span className="text-[#DC2626] ml-1">AI</span>
                 </span>
             </Link>
@@ -80,7 +86,11 @@ useEffect(() => {
                 <Link
                   key={link.name}
                   href={link.href}
-                  className="relative text-sm font-medium text-black/70 hover:text-[#DC2626] transition-colors"
+                  className={`relative text-sm font-medium transition-colors ${
+                    theme === "dark" 
+                      ? "text-gray-300 hover:text-[#DC2626]" 
+                      : "text-black/70 hover:text-[#DC2626]"
+                  }`}
                 >
                   {link.name}
                   {pathname === link.href && (
@@ -95,17 +105,36 @@ useEffect(() => {
 
             {/* AUTH BUTTONS */}
             <div className="hidden md:flex items-center gap-4">
+              {/* Dark Mode Toggle */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={toggleTheme}
+                className={`p-2 rounded-full transition-colors ${
+                  theme === "dark"
+                    ? "bg-gray-800 text-yellow-400 hover:bg-gray-700"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+                title={theme === "dark" ? "Mode Terang" : "Mode Gelap"}
+              >
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </motion.button>
+
               {isLoggedIn === null ? (
-                <div className="w-24 h-9 bg-gray-100 rounded-full animate-pulse" />
+                <div className={`w-24 h-9 rounded-full animate-pulse ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"}`} />
               ) : isLoggedIn ? (
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 pr-4 border-r border-gray-300">
+                    <div className={`flex items-center gap-2 pr-4 border-r ${theme === "dark" ? "border-gray-700" : "border-gray-300"}`}>
                         <div className="text-right hidden lg:block">
-                            <p className="text-sm font-bold text-gray-800 leading-none">Pengguna</p>
-                            <p className="text-[10px] text-gray-500">UMKM</p>
+                            <p className={`text-sm font-bold leading-none ${theme === "dark" ? "text-gray-200" : "text-gray-800"}`}>Pengguna</p>
+                            <p className={`text-[10px] ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>UMKM</p>
                         </div>
-                        <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center border border-gray-200 cursor-pointer hover:bg-gray-200 transition">
-                            <User size={18} className="text-gray-600"/>
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center border cursor-pointer transition ${
+                          theme === "dark" 
+                            ? "bg-gray-800 border-gray-700 hover:bg-gray-700" 
+                            : "bg-gray-100 border-gray-200 hover:bg-gray-200"
+                        }`}>
+                            <User size={18} className={theme === "dark" ? "text-gray-300" : "text-gray-600"}/>
                         </div>
                     </div>
                     <button
@@ -115,7 +144,8 @@ useEffect(() => {
                           setIsLoggedIn(false);
                           router.push("/");
                         }}
-                        className="text-gray-500 hover:text-[#DC2626] transition-colors" title="Keluar">
+                        className={`transition-colors ${theme === "dark" ? "text-gray-400 hover:text-[#DC2626]" : "text-gray-500 hover:text-[#DC2626]"}`} 
+                        title="Keluar">
                         <LogOut size={20} />
                     </button>
                 </div>
@@ -123,7 +153,7 @@ useEffect(() => {
                 <>
                   <Link
                     href="/login"
-                    className="text-sm font-semibold text-black hover:text-[#DC2626] transition-colors"
+                    className={`text-sm font-semibold transition-colors ${theme === "dark" ? "text-gray-300 hover:text-[#DC2626]" : "text-black hover:text-[#DC2626]"}`}
                   >
                     Masuk
                   </Link>
@@ -141,10 +171,21 @@ useEffect(() => {
             </div>
 
             {/* MOBILE HAMBURGER */}
-            <div className="md:hidden">
+            <div className="md:hidden flex items-center gap-3">
+              {/* Mobile Dark Mode Toggle */}
+              <button
+                onClick={toggleTheme}
+                className={`p-2 rounded-full transition-colors ${
+                  theme === "dark"
+                    ? "bg-gray-800 text-yellow-400"
+                    : "bg-gray-100 text-gray-600"
+                }`}
+              >
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
               <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="text-black hover:text-[#DC2626] transition-colors"
+                className={`transition-colors ${theme === "dark" ? "text-white hover:text-[#DC2626]" : "text-black hover:text-[#DC2626]"}`}
               >
                 {isOpen ? <X size={28} /> : <Menu size={28} />}
               </button>
@@ -159,7 +200,11 @@ useEffect(() => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-white border-t border-gray-100 overflow-hidden shadow-xl"
+              className={`md:hidden overflow-hidden shadow-xl ${
+                theme === "dark" 
+                  ? "bg-gray-900 border-t border-gray-800" 
+                  : "bg-white border-t border-gray-100"
+              }`}
             >
               <div className="px-4 pt-4 pb-6 space-y-2 flex flex-col">
                 {navLinks.map((link) => (
@@ -169,27 +214,33 @@ useEffect(() => {
                     onClick={() => setIsOpen(false)}
                     className={`block px-3 py-3 rounded-md text-base font-medium ${
                       pathname === link.href
-                        ? "bg-red-50 text-[#DC2626]"
-                        : "text-gray-700 hover:bg-gray-50 hover:text-[#DC2626]"
+                        ? theme === "dark" 
+                          ? "bg-red-900/30 text-[#DC2626]" 
+                          : "bg-red-50 text-[#DC2626]"
+                        : theme === "dark"
+                          ? "text-gray-300 hover:bg-gray-800 hover:text-[#DC2626]"
+                          : "text-gray-700 hover:bg-gray-50 hover:text-[#DC2626]"
                     }`}
                   >
                     {link.name}
                   </Link>
                 ))}
 
-                <div className="border-t border-gray-100 my-2 pt-2 space-y-2">
+                <div className={`my-2 pt-2 space-y-2 ${theme === "dark" ? "border-t border-gray-800" : "border-t border-gray-100"}`}>
                   {isLoggedIn === null ? (
                     <div className="px-3 py-3">
-                      <div className="w-full h-10 bg-gray-100 rounded-lg animate-pulse" />
+                      <div className={`w-full h-10 rounded-lg animate-pulse ${theme === "dark" ? "bg-gray-800" : "bg-gray-100"}`} />
                     </div>
                   ) : isLoggedIn ? (
                     <>
-                      <div className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                        <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center border border-gray-200">
-                          <User size={16} className="text-gray-600"/>
+                      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg ${theme === "dark" ? "bg-gray-800" : "bg-gray-50"}`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+                          theme === "dark" ? "bg-gray-700 border-gray-600" : "bg-white border-gray-200"
+                        }`}>
+                          <User size={16} className={theme === "dark" ? "text-gray-300" : "text-gray-600"}/>
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-sm font-bold text-gray-800">Pengguna UMKM</span>
+                          <span className={`text-sm font-bold ${theme === "dark" ? "text-gray-200" : "text-gray-800"}`}>Pengguna UMKM</span>
                         </div>
                       </div>
                       <button
@@ -200,7 +251,9 @@ useEffect(() => {
                           setIsOpen(false);
                           router.push("/");
                         }}
-                        className="w-full flex items-center gap-2 px-3 py-3 text-red-600 font-medium hover:bg-red-50 rounded-lg"
+                        className={`w-full flex items-center gap-2 px-3 py-3 text-red-500 font-medium rounded-lg ${
+                          theme === "dark" ? "hover:bg-red-900/30" : "hover:bg-red-50"
+                        }`}
                       >
                         <LogOut size={18} /> Keluar
                       </button>
@@ -208,7 +261,9 @@ useEffect(() => {
                   ) : (
                     <>
                       <Link href="/login" onClick={() => setIsOpen(false)}>
-                        <button className="w-full text-left px-3 py-3 text-gray-700 font-medium hover:text-[#DC2626]">
+                        <button className={`w-full text-left px-3 py-3 font-medium hover:text-[#DC2626] ${
+                          theme === "dark" ? "text-gray-300" : "text-gray-700"
+                        }`}>
                           Masuk
                         </button>
                       </Link>

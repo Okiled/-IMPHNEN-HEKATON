@@ -10,6 +10,7 @@ import { fetchWithAuth, API_URL } from '@/lib/api';
 import { requireAuth } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import Navbar from '@/components/ui/Navbar';
+import { useTheme } from '@/lib/theme-context';
 
 interface ReportData {
   dateRange: {
@@ -55,12 +56,12 @@ interface ReportData {
 
 export default function ReportsPage() {
   const router = useRouter();
+  const { theme } = useTheme();
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check auth on mount
   useEffect(() => {
     if (!requireAuth(router)) {
       return;
@@ -152,10 +153,9 @@ export default function ReportsPage() {
     }
   };
 
-  // Don't render if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={`min-h-screen flex items-center justify-center ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
       </div>
     );
@@ -163,11 +163,11 @@ export default function ReportsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <Navbar />
         <div className="flex items-center justify-center py-20">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
-          <span className="ml-3 text-gray-600">Menyiapkan laporan...</span>
+          <span className={`ml-3 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>Menyiapkan laporan...</span>
         </div>
       </div>
     );
@@ -175,7 +175,7 @@ export default function ReportsPage() {
 
   if (error || !report) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen ${theme === "dark" ? "bg-gray-900" : "bg-gray-50"}`}>
         <Navbar />
         <div className="max-w-5xl mx-auto px-4 py-8 text-center">
           <div className="bg-white rounded-lg shadow p-8">
@@ -197,96 +197,89 @@ export default function ReportsPage() {
   const revenueChange = report.summary.revenueChange ?? 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-slate-900 selection:bg-red-600 selection:text-white">
+    <div className={`min-h-screen selection:bg-red-600 selection:text-white transition-colors duration-300 ${
+      theme === "dark" ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-slate-900"
+    }`}>
       <Navbar />
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
         
-        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Laporan Mingguan</h1>
-            <div className="flex items-center gap-2 text-gray-500 mt-1">
+            <h1 className={`text-3xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Laporan Mingguan</h1>
+            <div className={`flex items-center gap-2 mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
               <Calendar className="h-4 w-4" />
               <span className="text-sm">
                 Periode: {formatDate(report.dateRange.start)} - {formatDate(report.dateRange.end)}
               </span>
             </div>
           </div>
-          <Button variant="outline" onClick={loadData} className="flex items-center gap-2">
+          <Button variant="outline" onClick={loadData} className={`flex items-center gap-2 ${
+            theme === "dark" ? "bg-gray-800 border-gray-700 text-gray-200 hover:bg-gray-700" : ""
+          }`}>
             <RefreshCcw className="w-4 h-4" />
             Refresh
           </Button>
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-blue-200 rounded-full text-blue-700">
-                  <Package className="h-6 w-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card className={`${theme === "dark" ? "bg-gradient-to-br from-blue-900/40 to-blue-800/40 border-blue-700" : "bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200"}`}>
+            <CardContent className="p-4 h-[100px] flex items-center justify-center">
+              <div className="flex items-center gap-3 w-full">
+                <div className={`p-2.5 rounded-full flex-shrink-0 ${theme === "dark" ? "bg-blue-800 text-blue-300" : "bg-blue-200 text-blue-700"}`}>
+                  <Package className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Total Terjual</p>
-                  <p className="text-2xl font-bold text-gray-900">{report.summary.totalQuantity || 0}</p>
-                  {quantityChange !== 0 && (
-                    <div className={`flex items-center text-xs mt-1 ${quantityChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {quantityChange >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      <span>{Math.abs(quantityChange)}% vs minggu lalu</span>
-                    </div>
-                  )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme === "dark" ? "text-blue-300" : "text-blue-700"}`}>Total Terjual</p>
+                  <p className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{report.summary.totalQuantity || 0}</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>minggu ini</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-green-200 rounded-full text-green-700">
-                  <DollarSign className="h-6 w-6" />
+          <Card className={`${theme === "dark" ? "bg-gradient-to-br from-green-900/40 to-green-800/40 border-green-700" : "bg-gradient-to-br from-green-50 to-green-100 border-green-200"}`}>
+            <CardContent className="p-4 h-[100px] flex items-center justify-center">
+              <div className="flex items-center gap-3 w-full">
+                <div className={`p-2.5 rounded-full flex-shrink-0 ${theme === "dark" ? "bg-green-800 text-green-300" : "bg-green-200 text-green-700"}`}>
+                  <DollarSign className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">{formatRupiah(report.summary.totalRevenue || 0)}</p>
-                  {revenueChange !== 0 && (
-                    <div className={`flex items-center text-xs mt-1 ${revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {revenueChange >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      <span>{Math.abs(revenueChange)}% vs minggu lalu</span>
-                    </div>
-                  )}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme === "dark" ? "text-green-300" : "text-green-700"}`}>Total Revenue</p>
+                  <p className={`text-xl font-bold truncate ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{formatRupiah(report.summary.totalRevenue || 0)}</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-green-400" : "text-green-600"}`}>minggu ini</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-purple-200 rounded-full text-purple-700">
-                  <TrendingUp className="h-6 w-6" />
+          <Card className={`${theme === "dark" ? "bg-gradient-to-br from-purple-900/40 to-purple-800/40 border-purple-700" : "bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200"}`}>
+            <CardContent className="p-4 h-[100px] flex items-center justify-center">
+              <div className="flex items-center gap-3 w-full">
+                <div className={`p-2.5 rounded-full flex-shrink-0 ${theme === "dark" ? "bg-purple-800 text-purple-300" : "bg-purple-200 text-purple-700"}`}>
+                  <TrendingUp className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Produk Naik</p>
-                  <p className="text-2xl font-bold text-gray-900">
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme === "dark" ? "text-purple-300" : "text-purple-700"}`}>Produk Naik</p>
+                  <p className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                     {statusCounts.trending_up + statusCounts.growing}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">dari {totalStatusCount} produk</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-purple-400" : "text-purple-600"}`}>dari {totalStatusCount} produk</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-3">
-                <div className="p-3 bg-orange-200 rounded-full text-orange-700">
-                  <AlertTriangle className="h-6 w-6" />
+          <Card className={`${theme === "dark" ? "bg-gradient-to-br from-orange-900/40 to-orange-800/40 border-orange-700" : "bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200"}`}>
+            <CardContent className="p-4 h-[100px] flex items-center justify-center">
+              <div className="flex items-center gap-3 w-full">
+                <div className={`p-2.5 rounded-full flex-shrink-0 ${theme === "dark" ? "bg-orange-800 text-orange-300" : "bg-orange-200 text-orange-700"}`}>
+                  <AlertTriangle className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Perlu Perhatian</p>
-                  <p className="text-2xl font-bold text-gray-900">{report.attentionNeeded?.length || 0}</p>
-                  <p className="text-xs text-gray-500 mt-1">produk butuh aksi</p>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${theme === "dark" ? "text-orange-300" : "text-orange-700"}`}>Perlu Perhatian</p>
+                  <p className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{report.attentionNeeded?.length || 0}</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-orange-400" : "text-orange-600"}`}>produk butuh aksi</p>
                 </div>
               </div>
             </CardContent>
@@ -299,13 +292,13 @@ export default function ReportsPage() {
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Lightbulb className="h-5 w-5 text-yellow-500" />
-                <h3 className="text-lg font-bold text-gray-900">AI Insights</h3>
+                <h3 className={`text-lg font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>AI Insights</h3>
               </div>
             </CardHeader>
             <CardContent className="pt-0">
               <div className="space-y-2">
                 {insights.map((insight, idx) => (
-                  <div key={idx} className="p-3 bg-yellow-50 rounded-lg text-sm text-gray-700">
+                  <div key={idx} className={`p-3 rounded-lg text-sm ${theme === "dark" ? "bg-yellow-900/30 text-yellow-200" : "bg-yellow-50 text-gray-700"}`}>
                     {insight}
                   </div>
                 ))}
@@ -318,10 +311,10 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily Sales - Simple Bar Visual */}
           <Card>
-            <CardHeader className="pb-2 border-b">
+            <CardHeader className={`pb-2 border-b ${theme === "dark" ? "border-gray-700" : ""}`}>
               <div className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-gray-500" />
-                <h3 className="font-bold text-gray-900">Penjualan Harian</h3>
+                <BarChart3 className={`h-5 w-5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Penjualan Harian</h3>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
@@ -333,10 +326,10 @@ export default function ReportsPage() {
                     return (
                       <div key={idx}>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="text-gray-600">{formatDate(day.date)}</span>
-                          <span className="font-medium text-gray-900">{day.quantity} item</span>
+                          <span className={theme === "dark" ? "text-gray-300" : "text-gray-600"}>{formatDate(day.date)}</span>
+                          <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{day.quantity} item</span>
                         </div>
-                        <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+                        <div className={`h-3 rounded-full overflow-hidden ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"}`}>
                           <div 
                             className="h-full bg-red-500 transition-all duration-500 rounded-full"
                             style={{ width: `${pct}%` }}
@@ -347,8 +340,8 @@ export default function ReportsPage() {
                   })}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <BarChart3 className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <div className={`text-center py-8 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                  <BarChart3 className={`w-12 h-12 mx-auto mb-2 ${theme === "dark" ? "text-gray-600" : "text-gray-300"}`} />
                   <p>Belum ada data harian</p>
                 </div>
               )}
@@ -357,10 +350,10 @@ export default function ReportsPage() {
 
           {/* Status Distribution */}
           <Card>
-            <CardHeader className="pb-2 border-b">
+            <CardHeader className={`pb-2 border-b ${theme === "dark" ? "border-gray-700" : ""}`}>
               <div className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-gray-500" />
-                <h3 className="font-bold text-gray-900">Distribusi Status Produk</h3>
+                <Package className={`h-5 w-5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Distribusi Status Produk</h3>
               </div>
             </CardHeader>
             <CardContent className="pt-4">
@@ -377,10 +370,10 @@ export default function ReportsPage() {
                   return (
                     <div key={item.label}>
                       <div className="flex justify-between text-sm mb-1">
-                        <span className="text-gray-600">{item.emoji} {item.label}</span>
-                        <span className="font-medium text-gray-900">{item.count} ({pct.toFixed(0)}%)</span>
+                        <span className={theme === "dark" ? "text-gray-300" : "text-gray-600"}>{item.emoji} {item.label}</span>
+                        <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{item.count} ({pct.toFixed(0)}%)</span>
                       </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-2 rounded-full overflow-hidden ${theme === "dark" ? "bg-gray-700" : "bg-gray-100"}`}>
                         <div 
                           className={`h-full ${item.color} transition-all duration-500`}
                           style={{ width: `${pct}%` }}
@@ -399,35 +392,37 @@ export default function ReportsPage() {
           
           {/* Top Performers */}
           <Card>
-            <CardHeader className="pb-3 border-b border-gray-100">
+            <CardHeader className={`pb-3 border-b ${theme === "dark" ? "border-gray-700" : "border-gray-100"}`}>
               <div className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-yellow-500" />
-                <h3 className="text-lg font-bold text-gray-900">Top Performers</h3>
+                <h3 className={`text-lg font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Top Performers</h3>
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-3">
               {!report.topPerformers || report.topPerformers.length === 0 ? (
                 <div className="text-center py-8">
-                  <Trophy className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                  <p className="text-gray-500 text-sm">Belum ada data penjualan.</p>
+                  <Trophy className={`w-12 h-12 mx-auto mb-2 ${theme === "dark" ? "text-gray-600" : "text-gray-300"}`} />
+                  <p className={`text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Belum ada data penjualan.</p>
                 </div>
               ) : (
                 report.topPerformers.slice(0, 5).map((prod, idx) => (
-                  <div key={prod.id || idx} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div key={prod.id || idx} className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                    theme === "dark" ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-50 hover:bg-gray-100"
+                  }`}>
                     <div className="flex items-center gap-3">
                       <span className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${
                         idx === 0 ? 'bg-yellow-100 text-yellow-700' : 
-                        idx === 1 ? 'bg-gray-200 text-gray-700' : 
+                        idx === 1 ? (theme === "dark" ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700') : 
                         idx === 2 ? 'bg-orange-100 text-orange-700' : 
-                        'bg-gray-100 text-gray-600'
+                        (theme === "dark" ? 'bg-gray-700 text-gray-400' : 'bg-gray-100 text-gray-600')
                       }`}>
                         {idx + 1}
                       </span>
                       <div>
-                        <span className="font-medium text-gray-800">{prod.name}</span>
+                        <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-800"}`}>{prod.name}</span>
                         <div className="flex items-center gap-2 mt-0.5">
                           {getMomentumIcon(prod.momentum)}
-                          <span className="text-xs text-gray-500">{prod.quantity} terjual</span>
+                          <span className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{prod.quantity} terjual</span>
                         </div>
                       </div>
                     </div>
@@ -440,31 +435,35 @@ export default function ReportsPage() {
 
           {/* Attention Needed */}
           <Card className="border-l-4 border-l-red-500">
-            <CardHeader className="pb-3 border-b border-gray-100">
+            <CardHeader className={`pb-3 border-b ${theme === "dark" ? "border-gray-700" : "border-gray-100"}`}>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-500" />
-                <h3 className="text-lg font-bold text-gray-900">Perlu Perhatian</h3>
+                <h3 className={`text-lg font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Perlu Perhatian</h3>
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-3">
               {!report.attentionNeeded || report.attentionNeeded.length === 0 ? (
                 <div className="text-center py-6">
                   <div className="text-4xl mb-2">✨</div>
-                  <p className="text-green-600 font-medium text-sm">Semua produk aman!</p>
-                  <p className="text-gray-400 text-xs">Tidak ada anomali atau penurunan drastis.</p>
+                  <p className={`font-medium text-sm ${theme === "dark" ? "text-green-400" : "text-green-600"}`}>Semua produk aman!</p>
+                  <p className={`text-xs ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>Tidak ada anomali atau penurunan drastis.</p>
                 </div>
               ) : (
                 report.attentionNeeded.map((item, idx) => (
                   <div key={idx} className={`p-3 rounded-lg border ${
-                    item.priority === 'critical' ? 'bg-red-50 border-red-200' :
-                    item.priority === 'high' ? 'bg-orange-50 border-orange-200' :
-                    'bg-yellow-50 border-yellow-200'
+                    theme === "dark" 
+                      ? item.priority === 'critical' ? 'bg-red-900/30 border-red-800' :
+                        item.priority === 'high' ? 'bg-orange-900/30 border-orange-800' :
+                        'bg-yellow-900/30 border-yellow-800'
+                      : item.priority === 'critical' ? 'bg-red-50 border-red-200' :
+                        item.priority === 'high' ? 'bg-orange-50 border-orange-200' :
+                        'bg-yellow-50 border-yellow-200'
                   }`}>
                     <div className="flex justify-between items-start mb-1">
-                      <span className="font-bold text-gray-900">{item.name}</span>
+                      <span className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{item.name}</span>
                       {getPriorityBadge(item.priority, item.status)}
                     </div>
-                    <p className="text-sm text-gray-600">{item.detail}</p>
+                    <p className={`text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>{item.detail}</p>
                   </div>
                 ))
               )}
@@ -476,11 +475,11 @@ export default function ReportsPage() {
         {/* Full Product Breakdown */}
         {report.topPerformers && report.topPerformers.length > 0 && (
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className={`border-b ${theme === "dark" ? "border-gray-700" : ""}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-gray-500" />
-                  <h3 className="font-bold text-gray-900">Detail Produk Minggu Ini</h3>
+                  <BarChart3 className={`h-5 w-5 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                  <h3 className={`font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Detail Produk Minggu Ini</h3>
                 </div>
                 <Badge variant="secondary">{report.topPerformers.length} produk</Badge>
               </div>
@@ -488,26 +487,26 @@ export default function ReportsPage() {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-gray-50">
+                  <thead className={theme === "dark" ? "bg-gray-800" : "bg-gray-50"}>
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Produk</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>#</th>
+                      <th className={`px-6 py-3 text-left text-xs font-medium uppercase tracking-wider ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Produk</th>
+                      <th className={`px-6 py-3 text-right text-xs font-medium uppercase tracking-wider ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Qty</th>
+                      <th className={`px-6 py-3 text-right text-xs font-medium uppercase tracking-wider ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Revenue</th>
+                      <th className={`px-6 py-3 text-center text-xs font-medium uppercase tracking-wider ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className={`divide-y ${theme === "dark" ? "divide-gray-700" : "divide-gray-200"}`}>
                     {report.topPerformers.map((prod, idx) => (
-                      <tr key={prod.id || idx} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm text-gray-500">{idx + 1}</td>
+                      <tr key={prod.id || idx} className={theme === "dark" ? "hover:bg-gray-800" : "hover:bg-gray-50"}>
+                        <td className={`px-6 py-4 text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{idx + 1}</td>
                         <td className="px-6 py-4">
-                          <span className="font-medium text-gray-900">{prod.name}</span>
+                          <span className={`font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>{prod.name}</span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-right font-medium text-gray-900">
+                        <td className={`px-6 py-4 text-sm text-right font-medium ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
                           {prod.quantity}
                         </td>
-                        <td className="px-6 py-4 text-sm text-right text-gray-600">
+                        <td className={`px-6 py-4 text-sm text-right ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                           {formatRupiah(prod.revenue || 0)}
                         </td>
                         <td className="px-6 py-4 text-center">

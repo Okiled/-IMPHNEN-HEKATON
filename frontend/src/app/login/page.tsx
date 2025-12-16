@@ -10,10 +10,50 @@ import { API_URL } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 import { sanitizeEmail } from "@/lib/sanitize";
 import { CheckCircle, Mail } from "lucide-react";
+import { useTheme } from "@/lib/theme-context";
+
+const translateErrorMessage = (message: string): string => {
+  const errorMap: Record<string, string> = {
+    "Invalid login credentials": "Email atau kata sandi yang Anda masukkan salah",
+    "Invalid credentials": "Email atau kata sandi yang Anda masukkan salah",
+    "invalid login credentials": "Email atau kata sandi yang Anda masukkan salah",
+    "User not found": "Akun dengan email tersebut tidak ditemukan",
+    "user not found": "Akun dengan email tersebut tidak ditemukan",
+    "Email not verified": "Email Anda belum diverifikasi. Silakan cek inbox email Anda",
+    "email not verified": "Email Anda belum diverifikasi. Silakan cek inbox email Anda",
+    "Invalid password": "Kata sandi yang Anda masukkan salah",
+    "Wrong password": "Kata sandi yang Anda masukkan salah",
+    "Password incorrect": "Kata sandi yang Anda masukkan salah",
+    "Email already exists": "Email sudah terdaftar. Silakan gunakan email lain atau masuk",
+    "Email already registered": "Email sudah terdaftar. Silakan gunakan email lain atau masuk",
+    "User already exists": "Email sudah terdaftar. Silakan gunakan email lain atau masuk",
+    "Password too short": "Kata sandi minimal 6 karakter",
+    "Password too weak": "Kata sandi terlalu lemah. Gunakan kombinasi huruf dan angka",
+    "Invalid email": "Format email tidak valid",
+    "Invalid email format": "Format email tidak valid",
+    "Network error": "Koneksi terputus. Periksa jaringan internet Anda",
+    "Server error": "Terjadi kesalahan pada server. Silakan coba lagi nanti",
+    "Too many requests": "Terlalu banyak percobaan. Silakan tunggu beberapa saat",
+    "Rate limit exceeded": "Terlalu banyak percobaan. Silakan tunggu beberapa saat",
+    "Login gagal": "Gagal masuk. Periksa kembali email dan kata sandi Anda",
+    "Register gagal": "Gagal mendaftar. Silakan coba lagi",
+  };
+
+  const lowerMessage = message.toLowerCase();
+  
+  for (const [key, value] of Object.entries(errorMap)) {
+    if (lowerMessage.includes(key.toLowerCase())) {
+      return value;
+    }
+  }
+  
+  return message;
+};
 
 export default function AuthPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
 
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
@@ -64,7 +104,7 @@ export default function AuthPage() {
 
       router.push("/products");
     } catch (err: any) {
-      setError(err.message || "Login gagal");
+      setError(translateErrorMessage(err.message || "Login gagal"));
     } finally {
       setLoading(false);
     }
@@ -106,7 +146,7 @@ export default function AuthPage() {
         router.push("/products");
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Register gagal");
+      setError(translateErrorMessage(err instanceof Error ? err.message : "Register gagal"));
     } finally {
       setLoading(false);
     }
@@ -115,7 +155,9 @@ export default function AuthPage() {
   // Show verification sent screen
   if (showVerificationSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 overflow-hidden">
+      <div className={`min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-300 ${
+        theme === "dark" ? "bg-gray-900" : "bg-gray-50"
+      }`}>
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -123,11 +165,13 @@ export default function AuthPage() {
         >
           <Card className="p-6">
             <CardContent className="text-center py-8">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                theme === "dark" ? "bg-green-900/30" : "bg-green-100"
+              }`}>
                 <Mail className="w-8 h-8 text-green-600" />
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Cek Email Anda</h2>
-              <p className="text-gray-600 mb-6">
+              <h2 className={`text-2xl font-bold mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Cek Email Anda</h2>
+              <p className={`mb-6 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                 Kami telah mengirim link verifikasi ke <strong>{email}</strong>. 
                 Klik link tersebut untuk mengaktifkan akun Anda.
               </p>
@@ -140,10 +184,10 @@ export default function AuthPage() {
               >
                 Kembali ke Login
               </Button>
-              <p className="text-sm text-gray-500 mt-4">
+              <p className={`text-sm mt-4 ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
                 Tidak menerima email? Cek folder spam atau{" "}
                 <span 
-                  className="text-blue-600 cursor-pointer"
+                  className="text-blue-500 cursor-pointer hover:text-blue-400"
                   onClick={() => setShowVerificationSent(false)}
                 >
                   daftar ulang
@@ -157,7 +201,9 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 overflow-hidden">
+    <div className={`min-h-screen flex items-center justify-center overflow-hidden transition-colors duration-300 ${
+      theme === "dark" ? "bg-gray-900" : "bg-gray-50"
+    }`}>
       <motion.div
         layout
         transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -170,7 +216,7 @@ export default function AuthPage() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
-              className="text-2xl font-bold text-center"
+              className={`text-2xl font-bold text-center ${theme === "dark" ? "text-white" : "text-gray-900"}`}
             >
               {mode === "login" ? "Masuk ke Megaw AI" : "Daftar Akun Baru"}
             </motion.h2>
@@ -179,9 +225,11 @@ export default function AuthPage() {
           <CardContent>
             {/* Success message (e.g., after email verification) */}
             {successMessage && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+              <div className={`mb-4 p-3 border rounded-lg flex items-center gap-2 ${
+                theme === "dark" ? "bg-green-900/30 border-green-800" : "bg-green-50 border-green-200"
+              }`}>
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                <p className="text-green-700 text-sm">{successMessage}</p>
+                <p className={`text-sm ${theme === "dark" ? "text-green-400" : "text-green-700"}`}>{successMessage}</p>
               </div>
             )}
 
@@ -216,11 +264,11 @@ export default function AuthPage() {
                     Masuk
                   </Button>
 
-                  <p className="text-center text-sm">
+                  <p className={`text-center text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                     Belum punya akun?{" "}
                     <span
                       onClick={() => setMode("register")}
-                      className="text-blue-600 cursor-pointer"
+                      className="text-blue-500 cursor-pointer hover:text-blue-400"
                     >
                       Daftar sekarang
                     </span>
@@ -256,11 +304,11 @@ export default function AuthPage() {
                     Buat Akun
                   </Button>
 
-                  <p className="text-center text-sm">
+                  <p className={`text-center text-sm ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                     Sudah punya akun?{" "}
                     <span
                       onClick={() => setMode("login")}
-                      className="text-blue-600 cursor-pointer"
+                      className="text-blue-500 cursor-pointer hover:text-blue-400"
                     >
                       Masuk
                     </span>

@@ -22,23 +22,25 @@ export interface CalendarFactors {
   totalFactor: number; // The multiplier for Expected Demand
 }
 
-// Logic updated based on Guide Table 11.1 (Retail/F&B Context)
+// Logic updated based on retail/bakery sales patterns
+// Weekend (Sat-Sun) typically highest, Tuesday lowest
 export function getDayOfWeekFactor(date: Date): number {
   const day = date.getDay(); // 0 = Sunday, 6 = Saturday
 
-  // Weekend Peak (Sabtu 1.30, Jumat 1.20)
-  if (day === 6) return 1.30;
-  if (day === 5) return 1.20;
+  // Weekend Peak - highest traffic
+  if (day === 0) return 1.11;  // Sunday (highest - family outings)
+  if (day === 6) return 1.08;  // Saturday
 
-  // Family time / Recovery (Minggu 0.80, Senin 0.85)
-  if (day === 0) return 0.80;
-  if (day === 1) return 0.85;
+  // Friday - pre-weekend boost
+  if (day === 5) return 1.01;
 
-  // Mid-week baseline (Selasa - Kamis)
-  if (day === 2) return 0.95;
-  if (day === 4) return 1.05;
+  // Weekday patterns
+  if (day === 1) return 0.97;  // Monday
+  if (day === 2) return 0.93;  // Tuesday (lowest)
+  if (day === 3) return 0.94;  // Wednesday
+  if (day === 4) return 0.96;  // Thursday
 
-  return 1.00; // Wednesday / typical
+  return 1.00; // fallback
 }
 
 // Logic updated based on Guide Section 11.2 (Indonesia Payday Cycle)

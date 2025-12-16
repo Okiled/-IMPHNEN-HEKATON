@@ -23,6 +23,7 @@ import { AlertCard } from "./AlertCard";
 import { API_URL } from "@/lib/api";
 import { getToken, handleAuthError, clearAuth } from "@/lib/auth";
 import { logger } from "@/lib/logger";
+import { useTheme } from "@/lib/theme-context";
 
 type IntelligenceDashboardProps = {
   productId: string;
@@ -94,6 +95,7 @@ function friendlyConfidence(confidence: ProductIntelligence["confidence"]) {
 type ForecastDays = 7 | 14 | 30;
 
 export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps) {
+  const { theme } = useTheme();
   const [intelligence, setIntelligence] = useState<ProductIntelligence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -299,20 +301,24 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className={`text-2xl font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
               Dashboard UMKM: {intelligence.productName || "Produk"}
             </h2>
             <button
               onClick={() => setShowOnboarding(true)}
-              className="rounded-full border border-gray-200 bg-white p-1.5 text-gray-600 shadow-sm hover:bg-gray-50"
+              className={`rounded-full border p-1.5 shadow-sm ${
+                theme === "dark" 
+                  ? "border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700" 
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
             >
               <HelpCircle className="h-5 w-5" />
             </button>
           </div>
-          <p className="text-base text-gray-600">
+          <p className={`text-base ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
             Prediksi cerdas + rekomendasi bisnis untuk UMKM. {lastUpdated ? `Update ${lastUpdated.toLocaleTimeString("id-ID")}` : ""}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className={`text-sm ${theme === "dark" ? "text-gray-500" : "text-gray-500"}`}>
             Data {dataQualityDays} hari | Akurasi ~{friendlyConf.pct}% | Kepercayaan {friendlyConf.overall}
           </p>
         </div>
@@ -320,7 +326,9 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
           <Button
             variant="outline"
             onClick={fetchData}
-            className="flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm ${
+              theme === "dark" ? "border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-gray-100" : ""
+            }`}
           >
             <RefreshCcw className="h-4 w-4" />
             Refresh
@@ -328,7 +336,9 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
           <Button
             variant="outline"
             onClick={handleExportCSV}
-            className="flex items-center gap-2 rounded-full px-3 py-2 text-sm"
+            className={`flex items-center gap-2 rounded-full px-3 py-2 text-sm ${
+              theme === "dark" ? "border-gray-600 text-gray-300 hover:bg-gray-700 hover:text-gray-100" : ""
+            }`}
           >
             <Download className="h-4 w-4" />
             Export CSV
@@ -337,70 +347,76 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-md p-5 border-l-4 border-red-500">
+        <div className={`rounded-xl shadow-md p-5 border-l-4 border-red-500 ${
+          theme === "dark" ? "bg-gray-800 border border-gray-700" : "bg-gradient-to-br from-red-50 to-red-100"
+        }`}>
           <div className="flex items-center gap-3">
             <div className="text-3xl">{status === "MENURUN" ? "📉" : status === "NAIK" ? "📈" : "➡️"}</div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-600 mb-1">Penjualan Anda</h3>
+              <h3 className={`text-sm font-semibold mb-1 ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Penjualan Anda</h3>
               <div
                 className="text-xl font-bold"
                 style={{
-                  color: status === "MENURUN" ? "#DC2626" : status === "NAIK" ? "#16A34A" : "#374151",
+                  color: status === "MENURUN" ? "#DC2626" : status === "NAIK" ? "#16A34A" : (theme === "dark" ? "#ffffff" : "#374151"),
                 }}
               >
                 {status === "MENURUN" ? "TURUN" : status === "NAIK" ? "NAIK" : "STABIL"}
               </div>
-              <p className="text-xs text-gray-600 mt-1">{momentumText}</p>
+              <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>{momentumText}</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+        <div className={`rounded-xl shadow-md p-5 border-l-4 border-blue-500 ${
+          theme === "dark" ? "bg-gray-800 border border-gray-700" : "bg-gradient-to-br from-blue-50 to-blue-100"
+        }`}>
           <div className="flex items-center gap-3">
             <div className="text-3xl">{isCriticalBurst ? "🚨" : "✅"}</div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-600 mb-1">
+              <h3 className={`text-sm font-semibold mb-1 ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
                 {isCriticalBurst ? "Viral Alert" : "Penjualan Normal"}
               </h3>
-              <div className="text-xl font-bold text-blue-700">
+              <div className={`text-xl font-bold ${theme === "dark" ? "text-white" : "text-blue-700"}`}>
                 {isCriticalBurst ? `Lonjakan ${burstScore.toFixed(1)}x` : "Stabil"}
               </div>
-              <p className="text-xs text-gray-600 mt-1">
+              <p className={`text-xs mt-1 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
                 {isCriticalBurst ? "Penjualan hari ini jauh lebih tinggi dari biasanya." : "Tidak ada lonjakan mendadak."}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-md p-5 border-l-4 border-green-500">
+        <div className={`rounded-xl shadow-md p-5 border-l-4 border-green-500 ${
+          theme === "dark" ? "bg-gray-800 border border-gray-700" : "bg-gradient-to-br from-green-50 to-green-100"
+        }`}>
           <div className="flex items-center gap-3">
             <div className="text-3xl">🎯</div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-600 mb-1">Tingkat Kepercayaan</h3>
+              <h3 className={`text-sm font-semibold mb-1 ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>Tingkat Kepercayaan</h3>
               <div className="flex items-center gap-1.5 mb-1">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div
                     key={i}
                     className="w-2.5 h-2.5 rounded-full"
                     style={{
-                      background: i <= Math.ceil(confidenceScore * 5) ? "#10B981" : "#D1D5DB",
+                      background: i <= Math.ceil(confidenceScore * 5) ? "#10B981" : (theme === "dark" ? "#4B5563" : "#D1D5DB"),
                     }}
                   />
                 ))}
               </div>
-              <p className="text-lg font-bold text-green-700">
+              <p className={`text-lg font-bold ${theme === "dark" ? "text-white" : "text-green-700"}`}>
                 {confidenceScore > 0.8 ? "Sangat Akurat" : confidenceScore > 0.6 ? "Cukup Akurat" : "Perlu Data Lagi"}
               </p>
-              <p className="text-xs text-gray-600">Berdasarkan {dataQualityDays} hari data</p>
+              <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>Berdasarkan {dataQualityDays} hari data</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md p-6">
+      <div className={`rounded-xl shadow-md p-6 ${theme === "dark" ? "bg-gray-800" : "bg-white"}`}>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-base font-bold text-gray-900">📊 Prediksi {forecastDays} Hari ke Depan</h3>
+            <h3 className={`text-base font-bold ${theme === "dark" ? "text-white" : "text-gray-900"}`}>📊 Prediksi {forecastDays} Hari ke Depan</h3>
             <div className="flex gap-1">
               {([7, 14, 30] as ForecastDays[]).map((d) => (
                 <button
@@ -409,7 +425,7 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
                   className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
                     forecastDays === d
                       ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      : theme === "dark" ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   {d}H
@@ -418,8 +434,8 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs text-gray-500">Total Prediksi</p>
-            <p className="text-lg font-bold text-blue-600">{numberFormatter.format(totalPrediction)} porsi</p>
+            <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Total Prediksi</p>
+            <p className="text-lg font-bold text-blue-400">{numberFormatter.format(totalPrediction)} porsi</p>
           </div>
         </div>
         <div className="h-[400px] w-full">
@@ -428,11 +444,11 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
               <AreaChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0.05} />
+                    <stop offset="5%" stopColor={theme === "dark" ? "#60a5fa" : "#22c55e"} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={theme === "dark" ? "#60a5fa" : "#22c55e"} stopOpacity={0.05} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme === "dark" ? "#374151" : "#e5e7eb"} />
                 {weekendAreas.map((area, idx) => (
                   <ReferenceArea
                     key={`${area.x1}-${idx}`}
@@ -452,17 +468,23 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
                     label={{ value: "PEAK", position: "top", fill: "#ef4444", fontSize: 14 }}
                   />
                 )}
-                <XAxis dataKey="label" tick={{ fontSize: 14, fontWeight: "bold" }} />
+                <XAxis dataKey="label" tick={{ fontSize: 14, fontWeight: "bold", fill: theme === "dark" ? "#9ca3af" : "#374151" }} />
                 <YAxis
-                  tick={{ fontSize: 14, fontWeight: "bold" }}
+                  tick={{ fontSize: 14, fontWeight: "bold", fill: theme === "dark" ? "#9ca3af" : "#374151" }}
                   tickFormatter={(v) => numberFormatter.format(v as number)}
                 />
-                <Tooltip />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: theme === "dark" ? "#1f2937" : "#ffffff",
+                    border: theme === "dark" ? "1px solid #374151" : "1px solid #e5e7eb",
+                    color: theme === "dark" ? "#f3f4f6" : "#111827"
+                  }}
+                />
                 <Area
                   type="monotone"
                   dataKey="lower"
                   stroke="none"
-                  fill="#ffffff"
+                  fill={theme === "dark" ? "#1f2937" : "#ffffff"}
                   fillOpacity={1}
                 />
                 <Area
@@ -472,39 +494,43 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
                   fill="url(#band)"
                   fillOpacity={0.3}
                 />
-                <Line type="monotone" dataKey="predicted_quantity" stroke="#2563eb" strokeWidth={4} dot={{ r: 6 }} />
+                <Line type="monotone" dataKey="predicted_quantity" stroke="#60a5fa" strokeWidth={4} dot={{ r: 6, fill: "#60a5fa" }} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-full items-center justify-center text-lg font-semibold text-gray-500">
+            <div className={`flex h-full items-center justify-center text-lg font-semibold ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
               Tidak ada data forecast.
             </div>
           )}
         </div>
         <div className="mt-4 flex justify-center gap-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-0.5 bg-blue-500" />
-            <span className="font-medium text-gray-600">Prediksi</span>
+            <div className="w-5 h-0.5 bg-blue-400" />
+            <span className={`font-medium ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>Prediksi</span>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-2">
-        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl shadow-md p-5">
-          <h3 className="text-base font-bold text-gray-900 mb-3">📦 Ringkasan Prediksi</h3>
+        <div className={`rounded-xl shadow-md p-5 border ${
+          theme === "dark" 
+            ? "bg-gray-800 border-orange-800" 
+            : "bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200"
+        }`}>
+          <h3 className={`text-base font-bold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>📦 Ringkasan Prediksi</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white rounded-lg p-3 text-center">
-              <p className="text-sm text-gray-500 mb-1">Total 7 Hari</p>
-              <p className="text-2xl font-bold text-blue-600">{numberFormatter.format(totalPrediction)}</p>
-              <p className="text-sm text-gray-400 mt-0.5">porsi</p>
+            <div className={`rounded-lg p-3 text-center ${theme === "dark" ? "bg-gray-900 border border-gray-700" : "bg-white"}`}>
+              <p className={`text-sm mb-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Total 7 Hari</p>
+              <p className={`text-2xl font-bold ${theme === "dark" ? "text-blue-400" : "text-blue-600"}`}>{numberFormatter.format(totalPrediction)}</p>
+              <p className={`text-sm mt-0.5 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>porsi</p>
             </div>
-            <div className="bg-white rounded-lg p-3 text-center">
-              <p className="text-sm text-gray-500 mb-1">Rata-rata/Hari</p>
-              <p className="text-2xl font-bold text-green-600">{numberFormatter.format(avgPerDay)}</p>
-              <p className="text-sm text-gray-400 mt-0.5">porsi</p>
+            <div className={`rounded-lg p-3 text-center ${theme === "dark" ? "bg-gray-900 border border-gray-700" : "bg-white"}`}>
+              <p className={`text-sm mb-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Rata-rata/Hari</p>
+              <p className={`text-2xl font-bold ${theme === "dark" ? "text-green-400" : "text-green-600"}`}>{numberFormatter.format(avgPerDay)}</p>
+              <p className={`text-sm mt-0.5 ${theme === "dark" ? "text-gray-500" : "text-gray-400"}`}>porsi</p>
             </div>
-            <div className="bg-white rounded-lg p-3 text-center">
-              <p className="text-sm text-gray-500 mb-1">Trend</p>
+            <div className={`rounded-lg p-3 text-center ${theme === "dark" ? "bg-gray-900 border border-gray-700" : "bg-white"}`}>
+              <p className={`text-sm mb-1 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>Trend</p>
               <p className="text-xl font-bold" style={{ color: trend === "DECREASING" ? "#DC2626" : "#16A34A" }}>
                 {trend === "DECREASING" ? "📉 Turun" : trend === "INCREASING" ? "📈 Naik" : "➡️ Stabil"}
               </p>
@@ -514,8 +540,10 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
             <span
               className="px-3 py-1 rounded-full text-sm font-semibold"
               style={{
-                background: priority === "HIGH" ? "#FEE2E2" : "#DBEAFE",
-                color: priority === "HIGH" ? "#DC2626" : "#2563EB",
+                background: theme === "dark" 
+                  ? (priority === "HIGH" ? "rgba(220, 38, 38, 0.3)" : "rgba(37, 99, 235, 0.3)")
+                  : (priority === "HIGH" ? "#FEE2E2" : "#DBEAFE"),
+                color: priority === "HIGH" ? "#DC2626" : "#60a5fa",
               }}
             >
               Priority: {priority}
@@ -523,18 +551,22 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-md p-5">
-          <h3 className="text-base font-bold text-gray-900 mb-3">🎯 Saran untuk Anda</h3>
+        <div className={`rounded-xl shadow-md p-5 border ${
+          theme === "dark" 
+            ? "bg-gray-800 border-purple-800" 
+            : "bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200"
+        }`}>
+          <h3 className={`text-base font-bold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>🎯 Saran untuk Anda</h3>
           {primaryRecommendation ? (
-            <div className="bg-white rounded-lg p-4">
+            <div className={`rounded-lg p-4 ${theme === "dark" ? "bg-gray-900 border border-gray-700" : "bg-white"}`}>
               <div className="flex items-start gap-2 mb-2">
                 <span className="text-2xl">{getEmoji(primaryRecommendation.type)}</span>
                 <div className="flex-1">
-                  <h4 className="text-base font-bold text-purple-700 mb-2">{primaryRecommendation.message}</h4>
+                  <h4 className={`text-base font-bold mb-2 ${theme === "dark" ? "text-purple-400" : "text-purple-700"}`}>{primaryRecommendation.message}</h4>
                   <ul className="space-y-2">
                     {(primaryRecommendation.suggestions || primaryRecommendation.details)?.map((item: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
-                        <span className="text-green-600 font-bold">✓</span>
+                      <li key={i} className={`flex items-start gap-2 text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+                        <span className="text-green-500 font-bold">✓</span>
                         <span>{item}</span>
                       </li>
                     ))}
@@ -543,13 +575,13 @@ export function IntelligenceDashboard({ productId }: IntelligenceDashboardProps)
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-lg p-4">
-              <p className="text-base font-semibold text-gray-700 mb-3">
+            <div className={`rounded-lg p-4 ${theme === "dark" ? "bg-gray-900 border border-gray-700" : "bg-white"}`}>
+              <p className={`text-base font-semibold mb-3 ${theme === "dark" ? "text-gray-200" : "text-gray-700"}`}>
                 {trend === "DECREASING"
                   ? "⚠️ Penjualan menurun, tingkatkan aktivitas promosi"
                   : "✅ Penjualan stabil, pertahankan kualitas"}
               </p>
-              <ul className="space-y-2 text-sm text-gray-600">
+              <ul className={`space-y-2 text-sm ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
                 {trend === "DECREASING" ? (
                   <>
                     <li>• Buat promo bundling atau diskon terbatas</li>

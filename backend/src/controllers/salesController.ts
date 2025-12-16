@@ -538,7 +538,7 @@ export const createBulkSales = async (req: Request, res: Response) => {
 
 /**
  * GET /api/sales/history
- * Get recent sales history for display
+ * Get recent sales history for display (with price data)
  */
 export const getSalesHistory = async (req: Request, res: Response) => {
   try {
@@ -551,24 +551,30 @@ export const getSalesHistory = async (req: Request, res: Response) => {
 
     const sales = await prisma.sales.findMany({
       where: {
-        products: {
-          user_id: String(userId)
-        }
+        user_id: String(userId)
       },
       include: {
         products: {
-          select: { name: true }
+          select: { name: true, price: true }
         }
       },
       orderBy: { sale_date: 'desc' },
       take: limit
     });
 
-    const history = sales.map(s => ({
-      date: s.sale_date.toISOString().split('T')[0],
-      product_name: s.products?.name || 'Unknown',
-      quantity: Number(s.quantity)
-    }));
+    const history = sales.map(s => {
+      const quantity = Number(s.quantity);
+      const unitPrice = s.products?.price ? Number(s.products.price) : null;
+      const revenue = s.revenue ? Number(s.revenue) : (unitPrice && quantity ? unitPrice * quantity : null);
+      
+      return {
+        date: s.sale_date.toISOString().split('T')[0],
+        product_name: s.products?.name || 'Unknown',
+        quantity,
+        unit_price: unitPrice,
+        revenue: revenue
+      };
+    });
 
     res.json({ success: true, data: history });
   } catch (error) {
@@ -615,13 +621,16 @@ export const uploadSalesFile = async (req: Request, res: Response) => {
     const defaultDate = req.body.sale_date || new Date().toISOString().split('T')[0];
 
     // Convert to bulk upsert format - date must be Date object
+    // Include price data for product price updates
     const rows = parsedData.map(item => {
       const dateStr = item.date || defaultDate;
       const dateObj = new Date(dateStr + 'T00:00:00');
       return {
         productName: item.productName,
         quantity: item.quantity,
-        date: dateObj
+        date: dateObj,
+        price: item.price,           // Unit price (harga satuan)
+        totalPrice: item.totalPrice  // Total price for calculation if needed
       };
     }).filter(row => !isNaN(row.date.getTime())); // Filter invalid dates
 

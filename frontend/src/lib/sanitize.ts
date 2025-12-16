@@ -1,4 +1,4 @@
-// Input sanitization utilities untuk XSS protection
+// sanitasi input untuk keamanan xss
 
 const HTML_ENTITIES: Record<string, string> = {
   '&': '&amp;',
@@ -17,18 +17,12 @@ export function escapeHtml(str: string): string {
 
 export function sanitizeInput(input: string): string {
   if (!input || typeof input !== 'string') return '';
-  return input
-    .trim()
-    .replace(/[<>]/g, '') // Remove angle brackets
-    .slice(0, 500); // Max length
+  return input.trim().replace(/[<>]/g, '').slice(0, 500);
 }
 
 export function sanitizeProductName(name: string): string {
   if (!name || typeof name !== 'string') return '';
-  return name
-    .trim()
-    .replace(/[^a-zA-Z0-9\s\-\_\.\,\(\)]/g, '')
-    .slice(0, 100);
+  return name.trim().replace(/[^a-zA-Z0-9\s\-\_\.\,\(\)]/g, '').slice(0, 100);
 }
 
 export function sanitizeNumber(value: string | number): number {
@@ -42,7 +36,6 @@ export function sanitizeEmail(email: string): string {
   return email.trim().toLowerCase().slice(0, 254);
 }
 
-// Validate and sanitize date string (YYYY-MM-DD format)
 export function sanitizeDate(dateStr: string): string | null {
   if (!dateStr || typeof dateStr !== 'string') return null;
   const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);

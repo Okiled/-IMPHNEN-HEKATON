@@ -14,46 +14,18 @@ export type UpsertSalesRow = {
   quantity: number
   hasPromo?: boolean
   source?: string
+  price?: number      // Unit price (harga satuan)
+  totalPrice?: number // Total price for calculating unit price if needed
 }
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
-  isConnected: boolean
 }
 
-// Optimized Prisma client for serverless (Vercel)
-const prisma = globalForPrisma.prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'production' ? ['error'] : ['error', 'warn'],
-})
+const prisma = globalForPrisma.prisma ?? new PrismaClient({ log: ['error'] })
 
-// Keep prisma instance in global scope to reuse connections across requests
-globalForPrisma.prisma = prisma
-
-// Warm up database connection (call once on startup)
-export async function warmupConnection(): Promise<boolean> {
-  if (globalForPrisma.isConnected) return true
-  
-  try {
-    await prisma.$queryRaw`SELECT 1`
-    globalForPrisma.isConnected = true
-    console.log('[DB] Connection warmed up successfully')
-    return true
-  } catch (error) {
-    console.error('[DB] Connection warmup failed:', error)
-    globalForPrisma.isConnected = false
-    return false
-  }
-}
-
-// Check if database is reachable
-export async function checkConnection(): Promise<{ ok: boolean; latency?: number; error?: string }> {
-  const start = Date.now()
-  try {
-    await prisma.$queryRaw`SELECT 1`
-    return { ok: true, latency: Date.now() - start }
-  } catch (error: any) {
-    return { ok: false, error: error.message }
-  }
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma
 }
 
 export { prisma }
