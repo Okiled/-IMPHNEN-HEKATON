@@ -4,7 +4,9 @@
       "Bash(git reset:*)",
       "WebFetch(domain:imphnen-hekaton-oboz.vercel.app)",
       "WebFetch(domain:imphnen-hekaton.vercel.app)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)"
     ]
   }
 }
