@@ -3304,6 +3304,7 @@ function errorLogger(err, req, res, next) {
 // src/index.ts
 var app = express4();
 var PORT = process.env.PORT || 5e3;
+app.set("trust proxy", 1);
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {

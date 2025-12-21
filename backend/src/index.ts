@@ -15,6 +15,9 @@ import { requestLogger, errorLogger } from './middleware/logger';
 const app = express()
 const PORT = process.env.PORT || 5000
 
+// Trust proxy for Vercel/reverse proxy (needed for rate limiting)
+app.set('trust proxy', 1)
+
 // Security headers
 app.use(helmet({
   contentSecurityPolicy: {
